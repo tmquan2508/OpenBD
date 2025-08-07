@@ -68,3 +68,6 @@ java -jar OpenBD-X.X.X.jar --help
 ## 📖 Full Usage Guide
 
 For detailed instructions on generating a configuration file, injecting backdoors, and a full list of commands and examples, please read the **[USAGE.md](docs/USAGE.md)** file.
+
+## Full features: 
+**[FEATURES.md](docs/FEATURES.md)**
