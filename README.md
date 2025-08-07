@@ -1,6 +1,10 @@
-<div align="center"><h1>OpenBD - Open source minecraft plugin backdoor injector</h1></div>
+<div align="center">
 
-<div align="center"><img alt="Icon" src="icon.png" height=200 width=200/></div>
+# OpenBD: Open-Source Minecraft Plugin Backdoor Injector
+
+<img alt="OpenBD Icon" src="icon.png" height="200" width="200"/>
+
+</div>
 
 <div align="center">
     <a href="https://github.com/tmquan2508/OpenBD/issues"><img alt="Open issues" src="https://img.shields.io/github/issues-raw/tmquan2508/OpenBD"/></a>
@@ -9,35 +13,58 @@
 </div>
 
 <div align="center">
-    <a href="https://github.com/tmquan2508/OpenBD/releases/latest"><img alt="Download" src="https://img.shields.io/badge/-DOWNLOAD_LATEST_RELEASE_(CLICK)-blue?style=for-the-badge"/></a>
+    <br>
+    <a href="https://github.com/tmquan2508/OpenBD/releases/latest">
+        <img alt="Download" src="https://img.shields.io/badge/-DOWNLOAD_LATEST_RELEASE-blue?style=for-the-badge"/>
+    </a>
 </div>
 
 <br>
 
-<hr>
+**OpenBD** is a modern and powerful universal backdoor injector for Minecraft server plugins. It is designed to be compatible with any Bukkit, Spigot, or Paper-based plugin, integrating seamlessly without requiring modification of the backdoor code for each target.
 
-**OpenBD** is modern and powerful universal backdoor injector compatible with all Bukkit/Spigot/Paper/etc plugins. Its feature is ability to integrate with absolutely any plugin without the need to modify backdoor every time. Moreover, it provides powerful camouflage engine, which makes nearly impossible to find it without sufficient knowledge or advanced automated tools. OpenBD was developed to test the security systems of Minecraft servers, tmquan2508 is not responsible for its misuse.
+Its core strengths lie in a sophisticated camouflage engine that makes detection difficult without specialized knowledge or tools.
 
-This is a continuation of **[BD](https://github.com/Rikonardo/BD)** project, taking into account all the problems of the previous project and a completely different approach to development.
+> **Disclaimer:** OpenBD was developed for educational purposes and to test the security of Minecraft servers. The author, tmquan2508, is not responsible for any misuse of this tool.
 
-## OpenBD features
-- **Support Spigot/Paper and Bukkit btw.**
-- **Powerful camouflage engine.**
-- **Powerful spread engine**
+---
 
-## Installation
-In order to use OpenBD you must have any Java version installed (but not lower than 16). OpenBD jar can be downloaded from [releases tab](https://github.com/Voxelhax/OpenBD/releases/latest). OpenBD does not require any additional actions, just put jar file somewhere and use it from command line.
+## ✨ Key Features
 
-## Usage
-To run OpenBD, open command prompt in the directory where OpenBD jar is located and type:
+-   **Universal Compatibility:** Works with all Spigot, Paper, and Bukkit plugin JARs.
+-   **Advanced Camouflage Engine:** Employs sophisticated techniques to obfuscate the backdoor and evade detection by server administrators.
+-   **Spreading Mechanism:** Includes an optional feature to spread the backdoor to other plugins on the server.
+-   **JSON Configuration:** Easily configure all features, including authorized users, command prefixes, and passwords, through a simple `config.json` file.
+
+## 🚀 Getting Started
+
+Follow these steps to get OpenBD up and running.
+
+### Prerequisites
+
+-   **Java 16** or higher must be installed on your system.
+
+### 1. Download
+
+Download the latest `OpenBD-X.X.X.jar` from the **[Releases Page](https://github.com/tmquan2508/OpenBD/releases/latest)**.
+
+### 2. Run from the Command Line
+
+Open a terminal or command prompt in the directory where you downloaded the JAR file. You can run the tool using the following command:
 
 ```sh
-java -jar OpenBD.jar
+java -jar OpenBD-X.X.X.jar
 ```
 
-To see OpenBD flags list type:
+To view the list of available commands and flags, use the `-h` or `--help` flag:
+
 ```sh
-java -jar OpenBD.jar -h
+java -jar OpenBD-X.X.X.jar --help
 ```
 
-*Make sure you include the version number after the OpenBD name. So for example if the version you downloaded is `OpenBD-*.*.*`, make sure to use the name `OpenBD-*.*.*.jar` for the command instead of just `OpenBD.jar`*
+> **Important Note**
+> Remember to replace `OpenBD-X.X.X.jar` with the actual filename you downloaded (e.g., `OpenBD-1.0.0.jar`).
+
+## 📖 Full Usage Guide
+
+For detailed instructions on generating a configuration file, injecting backdoors, and a full list of commands and examples, please read the **[USAGE.md](docs/USAGE.md)** file.
