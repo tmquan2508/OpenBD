@@ -32,12 +32,12 @@ dependencies {
     implementation("org.apache.commons:commons-lang3:3.12.0")
 }
 
-java {
-    toolchain.languageVersion.set(JavaLanguageVersion.of(16))
-}
+// java {
+//     toolchain.languageVersion.set(JavaLanguageVersion.of(16))
+// }
 
 tasks.withType<KotlinCompile> {
-    kotlinOptions.jvmTarget = "16"
+    kotlinOptions.jvmTarget = "1.8"
 }
 
 tasks {
