@@ -347,7 +347,7 @@ private fun applyConfiguration(
 
             if (placeholderIndex == -1) {
                 if (placeholder != "::USERNAMES::" && placeholder != "::UUIDS::" || (newValue.isNotEmpty())) {
-                     Logs.warn("Could not find placeholder '$placeholder' in constant pool. Skipping replacement.")
+                    Logs.warn("Could not find placeholder '$placeholder' in constant pool. Skipping replacement.")
                 }
                 return@forEach
             }
@@ -382,7 +382,7 @@ private fun applyConfiguration(
                 }
             }
             if (!replaced && (placeholder == "::CLASSLIST::" || (placeholder == "::UUIDS::" && newValue.isNotEmpty()))) {
-                 Logs.warn("Found placeholder '$placeholder' in pool, but no LDC instruction uses it.")
+                Logs.warn("Found placeholder '$placeholder' in pool, but no LDC instruction uses it.")
             }
         }
         
