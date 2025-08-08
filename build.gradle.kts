@@ -25,7 +25,6 @@ dependencies {
     implementation("org.javassist:javassist:3.29.0-GA")
     implementation("com.github.ajalt.mordant:mordant:2.0.0-beta6")
     implementation("org.yaml:snakeyaml:2.0")
-    implementation("org.rauschig:jarchivelib:1.2.0")
     implementation("com.google.code.gson:gson:2.10.1")
     compileOnly("org.apache.logging.log4j:log4j-api:2.17.1")
     compileOnly("org.apache.logging.log4j:log4j-core:2.17.1")
