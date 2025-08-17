@@ -1,13 +1,12 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import org.gradle.api.tasks.application.CreateStartScripts
 
-import org.gradle.api.tasks.compile.JavaCompile
-import org.gradle.language.jvm.tasks.ProcessResources
+import org.gradle.jvm.toolchain.JavaLanguageVersion
 
 plugins {
     kotlin("jvm") version "1.6.20"
     application
-    id("com.github.johnrengelman.shadow") version "7.1.2"
+    id("com.gradleup.shadow") version "9.0.0-rc2"
 }
 
 group = "com.tmquan2508"
@@ -31,24 +30,38 @@ dependencies {
     implementation("org.apache.commons:commons-lang3:3.12.0")
 }
 
-// java {
-//     toolchain.languageVersion.set(JavaLanguageVersion.of(16))
-// }
-
-tasks.withType<KotlinCompile> {
-    kotlinOptions.jvmTarget = "1.8"
-}
-
-tasks {
-    named<ShadowJar>("shadowJar") {
-        archiveClassifier.set("")
-    }
-
-    build {
-        dependsOn(shadowJar)
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
     }
 }
 
 application {
     mainClass.set("com.tmquan2508.inject.MainKt")
+}
+
+tasks {
+    named<ShadowJar>("shadowJar") {
+        archiveClassifier.set("")
+        mergeServiceFiles()
+    }
+
+    named<CreateStartScripts>("startShadowScripts") {
+        dependsOn(named("jar"))
+    }
+
+    named("distZip") {
+        dependsOn(named("shadowJar"))
+    }
+    named("distTar") {
+        dependsOn(named("shadowJar"))
+    }
+
+    named("startScripts") {
+        dependsOn(named("shadowJar"))
+    }
+
+    build {
+        dependsOn(shadowJar)
+    }
 }
