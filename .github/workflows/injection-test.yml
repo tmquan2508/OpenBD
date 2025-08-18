@@ -1,0 +1,62 @@
+name: Test Injection
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  injection-test:
+    strategy:
+      matrix:
+        java: [21]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    name: Test injection with Java ${{ matrix.java }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup JDK ${{ matrix.java }} (GraalVM)
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ matrix.java }}
+          distribution: "graalvm"
+
+      - name: Make Gradle wrappers executable (Linux & macOS only)
+        if: runner.os != 'Windows'
+        run: chmod +x ./gradlew
+
+      - name: Build
+        run: ./gradlew build
+
+      - name: Prepare dist folder
+        run: |
+          mkdir -p dist
+          cp build/libs/*.jar dist/OpenBD.jar
+
+      - name: Download test plugin (ViaVersion)
+        run: |
+          curl -L -o dist/ViaVersion.jar https://cdn.modrinth.com/data/P1OZGk5p/versions/e4eSuLAu/ViaVersion-5.4.2.jar
+
+      - name: Run injection test
+        shell: bash
+        run: |
+          cd dist
+          set -o pipefail
+          java -jar OpenBD.jar --generate-config config.json
+          java -jar OpenBD.jar \
+            --inject -m single -c config.json \
+            -i ViaVersion.jar \
+            -o ViaVersion-patched.jar \
+            --camouflage -r -tr | tee output.log
+
+          if ! grep -q "patched successfully" output.log; then
+            echo "❌ Injection did not complete properly"
+            exit 1
+          fi
+          if grep -q "Exception" output.log; then
+            echo "❌ Found Exception in logs"
+            exit 1
+          fi
