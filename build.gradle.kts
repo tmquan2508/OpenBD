@@ -9,8 +9,7 @@ plugins {
     id("com.gradleup.shadow") version "9.0.0-rc2"
 }
 
-group = "com.tmquan2508"
-version = "1.1.0"
+version = rootProject.version
 
 repositories {
     mavenCentral()
@@ -27,7 +26,7 @@ dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
     compileOnly("org.apache.logging.log4j:log4j-api:2.17.1")
     compileOnly("org.apache.logging.log4j:log4j-core:2.17.1")
-    implementation("org.apache.commons:commons-lang3:3.12.0")
+    compileOnly("org.apache.commons:commons-lang3:3.12.0")
 }
 
 java {
