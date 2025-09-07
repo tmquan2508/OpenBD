@@ -19,7 +19,7 @@ repositories {
 }
 
 dependencies {
-    implementation("org.spigotmc:spigot-api:1.19-R0.1-SNAPSHOT")
+    compileOnly("org.spigotmc:spigot-api:1.19-R0.1-SNAPSHOT")
     implementation("com.rikonardo.cafebabe:CafeBabe:1.0.1")
     implementation("org.javassist:javassist:3.29.0-GA")
     implementation("com.github.ajalt.mordant:mordant:2.0.0-beta6")
@@ -68,6 +68,15 @@ tasks {
         dependsOn(obfuscateAdvanced)
         archiveClassifier.set("")
         mergeServiceFiles()
+
+        val spigotApiJar = project.configurations.getByName("compileClasspath")
+            .find { it.name.startsWith("spigot-api") }
+
+        if (spigotApiJar != null) {
+            from(zipTree(spigotApiJar)) {
+                include("org/bukkit/plugin/Plugin.class")
+            }
+        }
     }
 
     named<CreateStartScripts>("startShadowScripts") {
