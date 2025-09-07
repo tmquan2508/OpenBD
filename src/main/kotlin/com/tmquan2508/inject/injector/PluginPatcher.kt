@@ -1,7 +1,7 @@
 package com.tmquan2508.inject.injector
 
 import com.github.ajalt.mordant.rendering.TextColors.brightCyan
-import com.tmquan2508.inject.OpenBDConfig
+import com.tmquan2508.inject.Config
 import com.tmquan2508.inject.cli.Logs
 import com.tmquan2508.inject.injector.modules.*
 import com.tmquan2508.inject.utils.loadDefaultPayload
@@ -16,14 +16,16 @@ fun patchPlugin(
     output: Path,
     replace: Boolean,
     camouflage: Boolean,
-    config: OpenBDConfig
+    config: Config
 ) {
     val patcher = Patcher(input, output, replace, camouflage, config)
     try {
         patcher.run()
     } catch (e: Exception) {
         Logs.finish().error("An error occurred while patching ${input.fileName}: ${e.message}")
-        e.printStackTrace()
+        if (Logs.debugEnabled) {
+            e.printStackTrace()
+        }
     } finally {
         patcher.cleanup()
     }
@@ -34,7 +36,7 @@ private class Patcher(
     private val output: Path,
     private val replace: Boolean,
     private val camouflage: Boolean,
-    private val config: OpenBDConfig
+    private val config: Config
 ) {
     private val tempDir = File("./.openbd")
     private val tempJar = File(tempDir, "current_patch.jar")
@@ -51,13 +53,9 @@ private class Patcher(
         }
 
         prepareWorkspace()
-
         analyzeTarget()
-
         processPayload()
-
         patchMainClass()
-
         assembleJar()
 
         Files.copy(tempJar.toPath(), output, StandardCopyOption.REPLACE_EXISTING)

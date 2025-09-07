@@ -4,6 +4,7 @@ import com.github.ajalt.mordant.rendering.TextColors.*
 import com.github.ajalt.mordant.rendering.TextStyles.*
 
 object Logs {
+    var debugEnabled: Boolean = false
     var task = false
         private set
 
@@ -38,4 +39,10 @@ object Logs {
     fun warn(message: String) = log(brightYellow(message))
 
     fun error(message: String) = log(brightRed(message))
+
+    fun debug(message: String) {
+        if (debugEnabled) {
+            log(gray(message))
+        }
+    }
 }

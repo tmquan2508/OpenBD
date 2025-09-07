@@ -10,8 +10,6 @@ import com.tmquan2508.inject.injector.patchPlugin
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.PrintStream
-import java.nio.file.Files
-import java.nio.file.Paths
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
@@ -41,7 +39,7 @@ fun runCli(args: Array<String>) {
 fun runGenerateConfig(args: List<String>) {
     val outputPath = args.firstOrNull() ?: throw Exception("Please provide the output path for config.json")
     try {
-        val defaultConfig = OpenBDConfig()
+        val defaultConfig = Config()
         val jsonString = GsonBuilder().setPrettyPrinting().create().toJson(defaultConfig)
         File(outputPath).writeText(jsonString, Charsets.UTF_8)
         Logs.info("Default configuration file created at: $outputPath")
@@ -60,8 +58,10 @@ fun runInjection(args: List<String>) {
     val inputPath = findArg("input", "i", args) ?: if (mode == "multiple") "plugins_in" else "plugin_in.jar"
     val outputPath = findArg("output", "o", args) ?: if (mode == "multiple") "plugins_out" else "plugin_out.jar"
     val replace = boolArg("replace", "r", args)
-    val traceErrors = boolArg("trace-errors", "tr", args)
+    val debugLog = boolArg("debug", "db", args)
     val camouflage = boolArg("camouflage", null, args)
+
+    Logs.debugEnabled = debugLog
 
     val inputFiles: List<File> = when (mode) {
         "multiple" -> {
@@ -104,21 +104,21 @@ fun runInjection(args: List<String>) {
                 config = config
             )
         } catch (e: Exception) {
-            handleError(e, traceErrors)
+            handleError(e, debugLog)
         }
     }
 }
 
-fun loadConfig(path: String): OpenBDConfig {
+fun loadConfig(path: String): Config {
     val configFile = File(path)
     if (!configFile.exists()) throw Exception("Configuration file not found: $path")
-    return Gson().fromJson(configFile.readText(), OpenBDConfig::class.java)
+    return Gson().fromJson(configFile.readText(), Config::class.java)
 }
 
-fun handleError(e: Exception, traceErrors: Boolean) {
+fun handleError(e: Exception, debugLog: Boolean) {
     if (Logs.task) Logs.finish()
     Logs.error("${e::class.qualifiedName}: ${e.message}")
-    if (traceErrors) {
+    if (debugLog) {
         val stackTrace = ByteArrayOutputStream().use { buff ->
             PrintStream(buff).use { ps -> e.printStackTrace(ps) }
             buff.toString()

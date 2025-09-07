@@ -2,7 +2,7 @@ package com.tmquan2508.inject
 
 import com.google.gson.annotations.SerializedName
 
-data class OpenBDConfig(
+data class Config(
     @SerializedName("authorized_uuids")
     val authorizedUuids: List<String> = emptyList(),
 
