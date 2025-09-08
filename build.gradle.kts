@@ -27,6 +27,7 @@ dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("org.ow2.asm:asm:9.7")
     implementation("org.ow2.asm:asm-tree:9.7")
+    implementation("org.ow2.asm:asm-commons:9.7")
     compileOnly("org.apache.logging.log4j:log4j-api:2.17.1")
     compileOnly("org.apache.logging.log4j:log4j-core:2.17.1")
     compileOnly("org.apache.commons:commons-lang3:3.12.0")

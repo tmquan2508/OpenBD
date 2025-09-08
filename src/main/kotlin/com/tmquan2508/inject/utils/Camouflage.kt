@@ -2,88 +2,117 @@ package com.tmquan2508.inject.utils
 
 import com.tmquan2508.inject.cli.Logs
 import java.io.File
+import java.io.IOException
 import java.util.Enumeration
+import java.util.Locale
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import kotlin.random.Random
 
-data class Camouflage(
+data class CamouflagePlan(
     val packageName: String,
-    val namePrefix: String,
-    val methodName: String
+    val namePrefix: String
 )
 
-fun generateCamouflagePlan(targetJarFile: File): Camouflage {
-    Logs.info("Analyzing JAR file to generate camouflage plan...")
-    val packageStructure = scanJarForPackageStructure(targetJarFile)
+private val CAMEL_CASE_SPLIT_REGEX = "(?<!(^|[A-Z]))(?=[A-Z])|(?<!^)(?=[A-Z][a-z])".toRegex()
 
+fun generateCamouflagePlan(targetJarFile: File): CamouflagePlan {
+    val packageStructure = scanJarForPackageStructure(targetJarFile)
     if (packageStructure.isEmpty()) {
-        Logs.warn("Target JAR contains no class files. Using fallback camouflage.")
-        return Camouflage("exploit/internal", "InternalTask", "run")
+        Logs.warn("Target JAR contains no valid packages. Using fallback camouflage.")
+        return CamouflagePlan("com/tmquan2508/internal/safe", "InternalTask")
     }
 
-    val packagesSortedByClassCount = packageStructure.toList().sortedByDescending { it.second.size }
-    val (chosenPackagePath, classNamesInPackage) = packagesSortedByClassCount[Random.nextInt(packagesSortedByClassCount.size.coerceAtMost(4))]
-    Logs.info("Selected package for camouflage: '$chosenPackagePath'")
+    val packagesSorted = packageStructure.entries
+        .filter { it.key.isNotEmpty() && !it.key.startsWith("META-INF") }
+        .sortedByDescending { it.value.size }
+
+    if (packagesSorted.isEmpty()) {
+        Logs.warn("No suitable packages for camouflage. Using fallback.")
+        return CamouflagePlan("com/tmquan2508/internal/fallback", "Task")
+    }
+
+    val chosenEntry = packagesSorted[Random.nextInt(packagesSorted.size.coerceAtMost(3))]
+    val chosenPackagePath = chosenEntry.key
+    val classNamesInPackage = chosenEntry.value
+
+    Logs.debug(" -> Selected package for camouflage: '$chosenPackagePath'")
 
     val dictionary = buildWordDictionaryFrom(classNamesInPackage)
-
     if (dictionary.isEmpty()) {
-        Logs.warn("Could not build a word dictionary from package '$chosenPackagePath'. Using fallback name.")
-        return Camouflage(chosenPackagePath, "Task", "execute")
+        Logs.warn("Could not build a word dictionary. Using simple fallback name.")
+        return CamouflagePlan(chosenPackagePath, "Core")
     }
-    Logs.info("Built a dictionary with ${dictionary.size} words.")
+    Logs.debug(" -> Built a dictionary with ${dictionary.size} words.")
 
-    val classPrefix = buildUniqueWordName(dictionary, classNamesInPackage.map { it.substringBeforeLast(".") }, 1..2)
-    var methodName = buildUniqueWordName(dictionary, emptyList(), 1..1)
-    methodName = methodName.replaceFirstChar { it.lowercase() }
-    Logs.info("Generated camouflage names: prefix='$classPrefix', method='$methodName'")
+    val simpleNames = classNamesInPackage.map { it.substringBeforeLast(".") }
+    val namePrefix = buildUniqueWordName(dictionary, simpleNames, 1, 2)
 
-    return Camouflage(chosenPackagePath, classPrefix, methodName)
+    return CamouflagePlan(chosenPackagePath, namePrefix)
 }
 
 private fun scanJarForPackageStructure(jarFile: File): Map<String, List<String>> {
     val packageMap = mutableMapOf<String, MutableList<String>>()
-    ZipFile(jarFile.canonicalPath).use { zipFile ->
-        val zipEntries: Enumeration<out ZipEntry> = zipFile.entries()
-        while (zipEntries.hasMoreElements()) {
-            val entry = zipEntries.nextElement() as ZipEntry
-            if (entry.isDirectory || !entry.name.endsWith(".class")) continue
+    try {
+        ZipFile(jarFile).use { zipFile ->
+            val zipEntries: Enumeration<out ZipEntry> = zipFile.entries()
+            while (zipEntries.hasMoreElements()) {
+                val entry = zipEntries.nextElement()
+                val entryName = entry.name
 
-            val fullPath = entry.name
-            val packageName = fullPath.substringBeforeLast("/", "")
-            val className = fullPath.substringAfterLast("/")
-            packageMap.getOrPut(packageName) { mutableListOf() }.add(className)
+                if (entry.isDirectory ||
+                    !entryName.endsWith(".class") ||
+                    entryName.contains("$") ||
+                    entryName.endsWith("package-info.class") ||
+                    entryName == "module-info.class"
+                ) {
+                    continue
+                }
+
+                val packageName = entryName.substringBeforeLast('/', "")
+                val className = entryName.substringAfterLast("/")
+                packageMap.getOrPut(packageName) { mutableListOf() }.add(className)
+            }
         }
+    } catch (e: IOException) {
+        Logs.warn("[Camouflage] Error scanning JAR file: ${e.message}")
     }
     return packageMap
 }
 
 private fun buildWordDictionaryFrom(classNames: List<String>): List<String> {
-    val dictionary = mutableSetOf<String>()
-    for (classNameWithExtension in classNames) {
-        val className = classNameWithExtension.substringBeforeLast(".")
-        splitCamelCase(className)
-            .map { it.replace("$", "") }
-            .filter { it.length > 2 }
-            .forEach { dictionary.add(it) }
-    }
-    return dictionary.toList()
+    return classNames
+        .map { it.substringBeforeLast(".") }
+        .flatMap { CAMEL_CASE_SPLIT_REGEX.split(it) }
+        .map { it.replace(Regex("[^a-zA-Z0-9]"), "") }
+        .filter { it.length > 2 }
+        .distinct()
+        .toList()
 }
 
-private fun buildUniqueWordName(dictionary: List<String>, existingNames: List<String>, wordCountRange: IntRange): String {
+private fun buildUniqueWordName(
+    dictionary: List<String>,
+    existingNames: List<String>,
+    minWords: Int,
+    maxWords: Int
+): String {
     var name: String
     var attempts = 0
     do {
-        name = (1..Random.nextInt(wordCountRange.first, wordCountRange.last + 1))
-            .map { dictionary[Random.nextInt(dictionary.size)] }
-            .joinToString("")
-        if (attempts > 10) name += attempts.toString()
+        val wordCount = if (maxWords > minWords) Random.nextInt(minWords, maxWords + 1) else minWords
+        name = (1..wordCount)
+            .joinToString("") {
+                val word = dictionary.random()
+                if (word.isNotEmpty()) {
+                    word.substring(0, 1).uppercase(Locale.getDefault()) + word.substring(1).lowercase(Locale.getDefault())
+                } else {
+                    ""
+                }
+            }
+        if (attempts > 10) {
+            name += attempts
+        }
         attempts++
-    } while (existingNames.contains(name))
+    } while (name.isEmpty() || existingNames.contains(name))
     return name
-}
-
-private fun splitCamelCase(pascalCaseString: String): List<String> {
-    return pascalCaseString.split("(?<!(^|[A-Z]))(?=[A-Z])|(?<!^)(?=[A-Z][a-z])".toRegex())
 }
