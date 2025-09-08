@@ -21,7 +21,6 @@ repositories {
 dependencies {
     compileOnly("org.spigotmc:spigot-api:1.19-R0.1-SNAPSHOT")
     implementation("com.rikonardo.cafebabe:CafeBabe:1.0.1")
-    implementation("org.javassist:javassist:3.29.0-GA")
     implementation("com.github.ajalt.mordant:mordant:2.0.0-beta6")
     implementation("org.yaml:snakeyaml:2.0")
     implementation("com.google.code.gson:gson:2.10.1")
