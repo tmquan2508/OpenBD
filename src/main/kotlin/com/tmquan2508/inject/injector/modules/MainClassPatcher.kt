@@ -81,8 +81,10 @@ private class OnEnableMethodAdapter(
     private val finalPayloadInternalName: String
 ) : MethodVisitor(Opcodes.ASM9, methodVisitor) {
 
-    override fun visitCode() {
-        super.visitCode()
-        insertPayloadCall(this.mv, finalPayloadInternalName)
+    override fun visitInsn(opcode: Int) {
+        if (opcode >= Opcodes.IRETURN && opcode <= Opcodes.RETURN) {
+            insertPayloadCall(this.mv, finalPayloadInternalName)
+        }
+        super.visitInsn(opcode)
     }
 }
