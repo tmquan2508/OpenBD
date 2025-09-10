@@ -54,7 +54,7 @@ fun runInjection(args: List<String>) {
         ?: throw Exception("Please provide the path to the configuration file via --config <path>")
     val config = loadConfig(configPath)
 
-    val mode = findArg("mode", "m", args) ?: "multiple"
+    val mode = findArg("mode", "m", args) ?: "single"
     val inputPath = findArg("input", "i", args) ?: if (mode == "multiple") "in" else "in.jar"
     val outputPath = findArg("output", "o", args) ?: if (mode == "multiple") "out" else "out.jar"
     val replace = boolArg("replace", "r", args)

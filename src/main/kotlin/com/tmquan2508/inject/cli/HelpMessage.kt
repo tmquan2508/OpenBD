@@ -10,7 +10,7 @@ Commands:
 
 Options for --inject:
   --config, -c <path>       Required. Path to the configuration file.
-  --mode, -m <mode>         Processing mode: 'multiple' (default) or 'single'.
+  --mode, -m <mode>         Processing mode: 'single' (default) or 'multiple'.
   --input, -i <path>        Input path. Directory for 'multiple' mode (default: 'in'), file for 'single' mode (default: 'in.jar').
   --output, -o <path>       Output path. Directory for 'multiple' mode (default: 'out'), file for 'single' mode (default: 'out.jar').
   --replace, -r             Replace the input file(s) instead of creating new ones in the output directory.
