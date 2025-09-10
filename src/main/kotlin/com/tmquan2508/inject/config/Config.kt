@@ -1,4 +1,4 @@
-package com.tmquan2508.inject
+package com.tmquan2508.inject.config
 
 import com.google.gson.annotations.SerializedName
 
