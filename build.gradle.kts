@@ -3,6 +3,7 @@ import org.gradle.api.tasks.application.CreateStartScripts
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 
 import com.tmquan2508.buildtools.AdvancedObfuscationTask
+import com.tmquan2508.gradle.RenameMethodsTask
 
 plugins {
     kotlin("jvm") version "1.6.20"
@@ -43,6 +44,8 @@ application {
 }
 
 tasks {
+    val mainClassesDir = layout.buildDirectory.dir("classes/java/main")
+
     val obfuscateAdvanced by register<AdvancedObfuscationTask>("obfuscateAdvanced") {
         description = "Applies advanced obfuscation (Control Flow Flattening)."
         group = "build"
@@ -50,22 +53,32 @@ tasks {
 
         targetClass = "com.tmquan2508.exploit.Config"
 
-        classesDir.set(layout.buildDirectory.dir("classes/java/main"))
-        outputClassesDir.set(layout.buildDirectory.dir("classes/java/main"))
+        classesDir.set(mainClassesDir)
+        outputClassesDir.set(mainClassesDir)
+    }
+
+    val renameMethods by register<RenameMethodsTask>("renameMethods") {
+        description = "Renames methods in the specified class."
+        group = "build"
+        dependsOn(obfuscateAdvanced)
+
+        targetClass = "com.tmquan2508.exploit.Config"
+        classesDir.set(mainClassesDir)
+        outputClassesDir.set(mainClassesDir)
     }
 
     named("jar") {
-        dependsOn(obfuscateAdvanced)
+        dependsOn(renameMethods)
     }
 
     if (project.tasks.findByName("inspectClassesForKotlinIC") != null) {
         named("inspectClassesForKotlinIC") {
-            dependsOn(obfuscateAdvanced)
+            dependsOn(renameMethods)
         }
     }
 
     named<ShadowJar>("shadowJar") {
-        dependsOn(obfuscateAdvanced)
+        dependsOn(renameMethods)
         archiveClassifier.set("")
         mergeServiceFiles()
 

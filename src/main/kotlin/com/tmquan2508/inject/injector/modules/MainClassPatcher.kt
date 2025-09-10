@@ -1,11 +1,9 @@
 package com.tmquan2508.inject.injector.modules
 
-import com.rikonardo.cafebabe.ClassFile
 import org.objectweb.asm.*
 
 internal fun patchMainClass(
     originalMainClassBytes: ByteArray,
-    finalPayloadClasses: List<ClassFile>,
     finalMainPayloadCallName: String
 ): ByteArray {
     val finalMainPayloadInternalName = finalMainPayloadCallName.replace('.', '/')

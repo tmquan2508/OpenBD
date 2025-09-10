@@ -1,6 +1,5 @@
 package com.tmquan2508.inject.injector.modules
 
-import com.rikonardo.cafebabe.ClassFile
 import com.tmquan2508.inject.cli.Logs
 import java.nio.file.FileSystems
 import java.nio.file.Files
@@ -10,17 +9,25 @@ internal fun assembleFinalJar(
     jarPath: Path,
     modifiedMainClassBytes: ByteArray,
     mainClassPath: String,
-    finalPayloadClasses: List<ClassFile>
+    processedPayload: ProcessedPayload
 ) {
     FileSystems.newFileSystem(jarPath).use { fs ->
-        Logs.info(" -> Injecting ${finalPayloadClasses.size} payload classes...")
-        finalPayloadClasses.forEach { finalClass ->
-            val pathInJar = fs.getPath(finalClass.name + ".class")
+        val totalPayloadClasses = processedPayload.otherClasses.size + 1
+        Logs.info(" -> Injecting $totalPayloadClasses payload classes...")
+
+        processedPayload.otherClasses.forEach { otherClass ->
+            val pathInJar = fs.getPath(otherClass.name + ".class")
             pathInJar.parent?.let { if (!Files.exists(it)) Files.createDirectories(it) }
-            Files.write(pathInJar, finalClass.compile())
+            Files.write(pathInJar, otherClass.compile())
         }
+
+        Logs.debug("  -> Writing main payload class: ${processedPayload.finalMainPayloadName}")
+        val mainPayloadPathInJar = fs.getPath(processedPayload.finalMainPayloadName + ".class")
+        mainPayloadPathInJar.parent?.let { if (!Files.exists(it)) Files.createDirectories(it) }
+        Files.write(mainPayloadPathInJar, processedPayload.finalMainPayloadBytes)
+
         Logs.info(" -> Replacing original main class with patched version...")
-        val pathInJar = fs.getPath(mainClassPath)
-        Files.write(pathInJar, modifiedMainClassBytes)
+        val mainClassPathInJar = fs.getPath(mainClassPath)
+        Files.write(mainClassPathInJar, modifiedMainClassBytes)
     }
 }
