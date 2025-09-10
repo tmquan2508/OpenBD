@@ -15,5 +15,6 @@ Options for --inject:
   --output, -o <path>       Output path. Directory for 'multiple' mode (default: 'out'), file for 'single' mode (default: 'out.jar').
   --replace, -r             Replace the input file(s) instead of creating new ones in the output directory.
   --camouflage              Camouflage the backdoor to avoid detection.
+  --debug, -db              Display debug log.
   --trace-errors, -tr       Display full stack trace on errors.
 """

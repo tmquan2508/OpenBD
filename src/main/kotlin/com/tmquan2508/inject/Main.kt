@@ -26,7 +26,7 @@ fun runCli(args: List<String>) {
     val command = args.first()
     val commandArgs = args.drop(1)
 
-    Logs.debugEnabled = boolArg("trace-errors", "tr", args)
+    Logs.debugEnabled = boolArg("debug", "db", args)
 
     when (command) {
         "--inject" -> runInjection(commandArgs)
