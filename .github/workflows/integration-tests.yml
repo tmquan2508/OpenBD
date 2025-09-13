@@ -30,14 +30,16 @@ jobs:
         curl -L -o input_single/LightweightHomes.jar "https://cdn.modrinth.com/data/1sgetJ56/versions/aFxopmzt/LightweightHomes-1.0.0.jar"
         curl -L -o input_multiple/LoginSecurity.jar "https://ci.codemc.io/view/Author/job/lenis0012/job/LoginSecurity/lastSuccessfulBuild/artifact/target/LoginSecurity-Spigot-3.3.1-SNAPSHOT.jar"
 
-    - name: Run Tests
-      id: run_tests
+    - name: Prepare Test Configuration
+      id: prepare_config
       run: |
         java -jar Injector.jar --generate-config config.json
         sed -i 's/"authorized_uuids": \[\]/"authorized_uuids": ["test-uuid"]/' config.json
         sed -i 's/"command_prefix": "!"/"command_prefix": "$"/' config.json
         sed -i 's/"password": ""/"password": "test-pass"/' config.json
-        
+
+    - name: Run Test 1 - Single Mode & Camouflage
+      run: |
         echo "### TEST 1: Single Mode & Camouflage ###"
         java -jar Injector.jar --inject -c config.json -m single -i input_single/LightweightHomes.jar -o output/LightweightHomes_patched.jar --camouflage --trace-errors
         [ -f "output/LightweightHomes_patched.jar" ] || (echo "TEST 1 FAILED: Patched file not created." && exit 1)
@@ -45,6 +47,8 @@ jobs:
         unzip -l output/LightweightHomes_patched.jar | grep "\$Options.class" > /dev/null || (echo "TEST 1 FAILED: Camouflaged class not found." && exit 1)
         echo "--- TEST 1 PASSED ---"
 
+    - name: Run Test 2 - Multiple Mode
+      run: |
         echo "### TEST 2: Multiple Mode ###"
         java -jar Injector.jar --inject -c config.json -m multiple -i input_multiple -o output --trace-errors
         [ -f "output/EssentialsX.jar" ] || (echo "TEST 2 FAILED: EssentialsX.jar not processed." && exit 1)
@@ -52,6 +56,8 @@ jobs:
         [ -f "output/LoginSecurity.jar" ] || (echo "TEST 2 FAILED: LoginSecurity.jar not processed." && exit 1)
         echo "--- TEST 2 PASSED ---"
 
+    - name: Run Test 3 - Patched Check
+      run: |
         echo "### TEST 3: Patched Check ###"
         OUTPUT=$(java -jar Injector.jar --inject -c config.json -m single -i output/LightweightHomes_patched.jar -o output/patched_fail.jar)
         echo "$OUTPUT" | grep "Target is already patched. Skipping." > /dev/null || (echo "TEST 3 FAILED: Did not skip patched file." && exit 1)
