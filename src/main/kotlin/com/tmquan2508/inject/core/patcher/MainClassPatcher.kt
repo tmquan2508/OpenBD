@@ -10,7 +10,7 @@ class MainClassPatcher {
         val finalMainPayloadInternalName = finalMainPayloadCallName.replace('.', '/')
 
         val classReader = ClassReader(originalMainClassBytes)
-        val classWriter = ClassWriter(classReader, ClassWriter.COMPUTE_FRAMES)
+        val classWriter = ClassWriter(classReader, ClassWriter.COMPUTE_MAXS)
 
         val classVisitor = OnEnableClassVisitor(classWriter, finalMainPayloadInternalName)
         classReader.accept(classVisitor, ClassReader.EXPAND_FRAMES)
@@ -26,7 +26,7 @@ class MainClassPatcher {
 
         return classWriter.toByteArray()
     }
-    
+
     private class OnEnableClassVisitor(
         classVisitor: ClassVisitor,
         private val finalPayloadInternalName: String
