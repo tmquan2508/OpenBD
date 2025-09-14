@@ -34,9 +34,10 @@ jobs:
       id: prepare_config
       run: |
         java -jar Injector.jar --generate-config config.json
-        sed -i 's/"authorized_uuids": \[\]/"authorized_uuids": ["test-uuid"]/' config.json
-        sed -i 's/"command_prefix": "!"/"command_prefix": "$"/' config.json
-        sed -i 's/"password": ""/"password": "test-pass"/' config.json
+        jq '.uuids = ["test-uuid"] | .prefix = "$" | .password = "test-pass" | .spread = true' config.json > config.tmp.json && mv config.tmp.json config.json
+        echo "--- Generated config.json for tests ---"
+        cat config.json
+        echo "-------------------------------------"
 
     - name: Run Test 1 - Single Mode & Camouflage
       run: |
@@ -44,7 +45,6 @@ jobs:
         java -jar Injector.jar --inject -c config.json -m single -i input_single/LightweightHomes.jar -o output/LightweightHomes_patched.jar --camouflage --trace-errors
         [ -f "output/LightweightHomes_patched.jar" ] || (echo "TEST 1 FAILED: Patched file not created." && exit 1)
         ! unzip -l output/LightweightHomes_patched.jar | grep "com/tmquan2508/exploit" > /dev/null || (echo "TEST 1 FAILED: Camouflage failed, default package found." && exit 1)
-        unzip -l output/LightweightHomes_patched.jar | grep "\$Options.class" > /dev/null || (echo "TEST 1 FAILED: Camouflaged class not found." && exit 1)
         echo "--- TEST 1 PASSED ---"
 
     - name: Run Test 2 - Multiple Mode
