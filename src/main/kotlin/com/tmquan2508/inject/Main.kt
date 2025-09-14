@@ -52,7 +52,8 @@ fun runGenerateConfig(args: List<String>) {
 fun runInjection(args: List<String>) {
     val configPath = findArg("config", "c", args)
         ?: throw Exception("Please provide the path to the configuration file via --config <path>")
-    val config = loadConfig(configPath)
+
+    val (config, configJson) = loadConfig(configPath)
 
     val mode = findArg("mode", "m", args) ?: "single"
     val inputPath = findArg("input", "i", args) ?: if (mode == "multiple") "in" else "in.jar"
@@ -99,15 +100,18 @@ fun runInjection(args: List<String>) {
             inputPath = inputFile.toPath(),
             outputPath = effectiveOutputPath,
             camouflage = camouflage,
-            config = config
+            config = config,
+            configJson = configJson
         ).patch()
     }
 }
 
-fun loadConfig(path: String): Config {
+fun loadConfig(path: String): Pair<Config, String> {
     val configFile = File(path)
     if (!configFile.exists()) throw Exception("Configuration file not found: $path")
-    return Gson().fromJson(configFile.readText(), Config::class.java)
+    val jsonString = configFile.readText(Charsets.UTF_8)
+    val configObject = Gson().fromJson(jsonString, Config::class.java)
+    return Pair(configObject, jsonString)
 }
 
 fun handleError(e: Exception, trace: Boolean) {

