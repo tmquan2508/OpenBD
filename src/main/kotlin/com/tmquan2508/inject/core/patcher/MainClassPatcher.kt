@@ -2,6 +2,35 @@ package com.tmquan2508.inject.core.patcher
 
 import org.objectweb.asm.*
 
+private class SafeClassWriter(classReader: ClassReader, flags: Int) : ClassWriter(classReader, flags) {
+    override fun getCommonSuperClass(type1: String, type2: String): String {
+        if (type1 == "java/lang/Object" || type2 == "java/lang/Object") {
+            return "java/lang/Object"
+        }
+
+        try {
+            val c = Class.forName(type1.replace('/', '.'))
+            val d = Class.forName(type2.replace('/', '.'))
+            if (c.isAssignableFrom(d)) {
+                return type1
+            }
+            if (d.isAssignableFrom(c)) {
+                return type2
+            }
+            if (c.isInterface || d.isInterface) {
+                return "java/lang/Object"
+            }
+            var anscestor = c
+            do {
+                anscestor = anscestor.superclass
+            } while (!anscestor.isAssignableFrom(d))
+            return anscestor.name.replace('.', '/')
+        } catch (e: Exception) {
+            return "java/lang/Object"
+        }
+    }
+}
+
 class MainClassPatcher {
     fun patch(
         originalMainClassBytes: ByteArray,
@@ -10,7 +39,8 @@ class MainClassPatcher {
         val finalMainPayloadInternalName = finalMainPayloadCallName.replace('.', '/')
 
         val classReader = ClassReader(originalMainClassBytes)
-        val classWriter = ClassWriter(classReader, ClassWriter.COMPUTE_MAXS)
+
+        val classWriter = SafeClassWriter(classReader, ClassWriter.COMPUTE_FRAMES)
 
         val classVisitor = OnEnableClassVisitor(classWriter, finalMainPayloadInternalName)
         classReader.accept(classVisitor, ClassReader.EXPAND_FRAMES)
