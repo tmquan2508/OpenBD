@@ -7,67 +7,96 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-    - name: Build with Gradle
-      run: ./gradlew shadowJar
-      
-    - name: Rename JAR
-      run: mv build/libs/*.jar Injector.jar
+      - name: Build with Gradle
+        run: ./gradlew shadowJar
 
-    - name: Prepare Environment
-      run: |
-        mkdir -p input_single input_multiple output
-        curl -L -o input_multiple/EssentialsX.jar "https://cdn.modrinth.com/data/hXiIvTyT/versions/Oa9ZDzZq/EssentialsX-2.21.2.jar"
-        curl -L -o input_multiple/ViaVersion.jar "https://cdn.modrinth.com/data/P1OZGk5p/versions/Xkqqslki/ViaVersion-5.5.0-SNAPSHOT.jar"
-        curl -L -o input_single/LightweightHomes.jar "https://cdn.modrinth.com/data/1sgetJ56/versions/aFxopmzt/LightweightHomes-1.0.0.jar"
-        curl -L -o input_multiple/LoginSecurity.jar "https://ci.codemc.io/view/Author/job/lenis0012/job/LoginSecurity/lastSuccessfulBuild/artifact/target/LoginSecurity-Spigot-3.3.1-SNAPSHOT.jar"
+      - name: Rename JAR
+        run: mv build/libs/*.jar Injector.jar
 
-    - name: Prepare Test Configuration
-      id: prepare_config
-      run: |
-        java -jar Injector.jar --generate-config config.json
-        jq '.uuids = ["test-uuid"] | .prefix = "$" | .password = "test-pass" | .spread = true' config.json > config.tmp.json && mv config.tmp.json config.json
-        echo "--- Generated config.json for tests ---"
-        cat config.json
-        echo "-------------------------------------"
+      - name: Prepare Environment (Dynamic Fetch)
+        run: |
+          set -euo pipefail
+          mkdir -p input_single input_multiple output
 
-    - name: Run Test 1 - Single Mode & Camouflage
-      run: |
-        echo "### TEST 1: Single Mode & Camouflage ###"
-        java -jar Injector.jar --inject -c config.json -m single -i input_single/LightweightHomes.jar -o output/LightweightHomes_patched.jar --camouflage --trace-errors
-        [ -f "output/LightweightHomes_patched.jar" ] || (echo "TEST 1 FAILED: Patched file not created." && exit 1)
-        ! unzip -l output/LightweightHomes_patched.jar | grep "com/tmquan2508/exploit" > /dev/null || (echo "TEST 1 FAILED: Camouflage failed, default package found." && exit 1)
-        echo "--- TEST 1 PASSED ---"
+          fetch_latest_from_modrinth() {
+            local slug="$1"
+            local output_path="$2"
+          
+            echo "Fetching latest version of '$slug' from Modrinth..."
+            if ! versions=$(curl -sSf "https://api.modrinth.com/v2/project/$slug/version"); then
+              echo "::error::Could not fetch versions for $slug"
+              exit 1
+            fi
+          
+            url=$(echo "$versions" \
+                  | jq -r '
+                      .[]
+                      | select(.loaders | any(. == "paper" or . == "spigot"))
+                      | .files[]
+                      | select(.primary == true)
+                      | .url' \
+                  | head -n1 || true)
+          
+            if [ -n "$url" ] && [ "$url" != "null" ]; then
+              echo "Downloading from $url"
+              curl -L -o "$output_path" "$url"
+            else
+              echo "::error::No suitable Paper/Spigot jar found for $slug"
+              exit 1
+            fi
+          }
+  
+          fetch_latest_from_modrinth "essentialsx" "input_multiple/EssentialsX.jar"
+          fetch_latest_from_modrinth "viaversion" "input_multiple/ViaVersion.jar"
+          fetch_latest_from_modrinth "lightweighthomes" "input_single/LightweightHomes.jar"
 
-    - name: Run Test 2 - Multiple Mode
-      run: |
-        echo "### TEST 2: Multiple Mode ###"
-        java -jar Injector.jar --inject -c config.json -m multiple -i input_multiple -o output --trace-errors
-        [ -f "output/EssentialsX.jar" ] || (echo "TEST 2 FAILED: EssentialsX.jar not processed." && exit 1)
-        [ -f "output/ViaVersion.jar" ] || (echo "TEST 2 FAILED: ViaVersion.jar not processed." && exit 1)
-        [ -f "output/LoginSecurity.jar" ] || (echo "TEST 2 FAILED: LoginSecurity.jar not processed." && exit 1)
-        echo "--- TEST 2 PASSED ---"
+          echo "Downloading LoginSecurity from CodeMC..."
+          curl -L -o input_multiple/LoginSecurity.jar "https://ci.codemc.io/view/Author/job/lenis0012/job/LoginSecurity/lastSuccessfulBuild/artifact/target/LoginSecurity-Spigot-3.3.1-SNAPSHOT.jar"
 
-    - name: Run Test 3 - Patched Check
-      run: |
-        echo "### TEST 3: Patched Check ###"
-        OUTPUT=$(java -jar Injector.jar --inject -c config.json -m single -i output/LightweightHomes_patched.jar -o output/patched_fail.jar)
-        echo "$OUTPUT" | grep "Target is already patched. Skipping." > /dev/null || (echo "TEST 3 FAILED: Did not skip patched file." && exit 1)
-        [ ! -f "output/patched_fail.jar" ] || (echo "TEST 3 FAILED: Created file for patched target." && exit 1)
-        echo "--- TEST 3 PASSED ---"
+      - name: Prepare Test Configuration
+        run: |
+          java -jar Injector.jar --generate-config config.json
+          jq '.uuids = ["test-uuid"] | .prefix = "$" | .password = "test-pass" | .spread = true' config.json > config.tmp.json && mv config.tmp.json config.json
 
-    - name: Test Summary
-      if: success()
-      run: echo "✅ All integration tests passed!"
-      
-    - name: Test Failure Summary
-      if: failure()
-      run: echo "❌ Integration tests failed. Check logs for details."
+      - name: Run Test 1 - Single Mode & Camouflage
+        run: |
+          echo "### TEST 1: Single Mode & Camouflage ###"
+          java -jar Injector.jar --inject -c config.json -m single -i input_single/LightweightHomes.jar -o output/LightweightHomes_patched.jar --camouflage --trace-errors
+          [ -f "output/LightweightHomes_patched.jar" ] || (echo "TEST 1 FAILED: Patched file not created." && exit 1)
+          ! unzip -l output/LightweightHomes_patched.jar | grep "com/tmquan2508/exploit" > /dev/null || (echo "TEST 1 FAILED: Camouflage failed, default package found." && exit 1)
+          echo "--- TEST 1 PASSED ---"
+
+      - name: Run Test 2 - Multiple Mode
+        run: |
+          echo "### TEST 2: Multiple Mode ###"
+          java -jar Injector.jar --inject -c config.json -m multiple -i input_multiple -o output --trace-errors
+          [ -f "output/EssentialsX.jar" ] || (echo "TEST 2 FAILED: EssentialsX.jar not processed." && exit 1)
+          [ -f "output/ViaVersion.jar" ] || (echo "TEST 2 FAILED: ViaVersion.jar not processed." && exit 1)
+          [ -f "output/LoginSecurity.jar" ] || (echo "TEST 2 FAILED: LoginSecurity.jar not processed." && exit 1)
+          echo "--- TEST 2 PASSED ---"
+
+      - name: Run Test 3 - Patched Check
+        run: |
+          echo "### TEST 3: Patched Check ###"
+          OUTPUT=$(java -jar Injector.jar --inject -c config.json -m single -i output/LightweightHomes_patched.jar -o output/patched_fail.jar)
+          echo "$OUTPUT"
+          echo "$OUTPUT" | grep "Target is already patched. Skipping." > /dev/null || (echo "TEST 3 FAILED: Did not skip patched file." && exit 1)
+          [ ! -f "output/patched_fail.jar" ] || (echo "TEST 3 FAILED: Created file for patched target." && exit 1)
+          echo "--- TEST 3 PASSED ---"
+
+      - name: Test Summary
+        if: success()
+        run: echo "✅ All integration tests passed!"
+
+      - name: Test Failure Summary
+        if: failure()
+        run: echo "❌ Integration tests failed. Check logs for details."
