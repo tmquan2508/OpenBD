@@ -31,7 +31,6 @@ class PayloadRelocator(private val camouflageGenerator: Camouflage) {
         Logs.info(" -> Selected camouflage package: '${plan.packageName}' with new base name '${plan.namePrefix}'")
 
         val finalMainPayloadName = "${plan.packageName}/${plan.namePrefix}"
-        val newSupportPackage = "${plan.packageName}/${plan.namePrefix}Support"
 
         val relocationMap = rawPayloadClasses.associate { clazz ->
             val originalName = clazz.name
@@ -39,7 +38,7 @@ class PayloadRelocator(private val camouflageGenerator: Camouflage) {
                 originalName.startsWith("$ORIGINAL_MAIN_PAYLOAD_NAME$") || originalName == ORIGINAL_MAIN_PAYLOAD_NAME ->
                     finalMainPayloadName + originalName.substring(ORIGINAL_MAIN_PAYLOAD_NAME.length)
                 originalName.startsWith(ORIGINAL_PACKAGE) ->
-                    newSupportPackage + originalName.substring(ORIGINAL_PACKAGE.length)
+                    plan.packageName + originalName.substring(ORIGINAL_PACKAGE.length)
                 else -> originalName
             }
             originalName to newName
