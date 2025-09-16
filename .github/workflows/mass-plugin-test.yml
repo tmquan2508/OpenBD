@@ -20,13 +20,25 @@ jobs:
       - name: Rename JAR
         run: mv build/libs/*.jar Injector.jar
 
-      - name: Prepare Environment (Random Paper/Spigot plugins)
+      - name: Prepare Environment (Truly Random Plugins)
         run: |
           set -euo pipefail
           mkdir -p input_multiple output
 
-          echo "Fetching random Paper/Spigot plugins from Modrinth..."
-          curl -sSf "https://api.modrinth.com/v2/search?facets=%5B%5B%22project_type:plugin%22%5D%2C%5B%22categories:paper%22%5D%5D&limit=100" \
+          echo "Fetching truly random Paper/Spigot plugins from Modrinth..."
+          SEARCH_URL="https://api.modrinth.com/v2/search?facets=%5B%5B%22project_type:plugin%22%5D%2C%5B%22categories:paper%22%5D%5D&limit=100"
+
+          TOTAL_HITS=$(curl -sSf "$SEARCH_URL" | jq '.total_hits')
+          echo "Found a total of $TOTAL_HITS compatible plugins."
+
+          MAX_OFFSET=$((TOTAL_HITS - 100))
+          if [ $MAX_OFFSET -lt 0 ]; then
+            MAX_OFFSET=0
+          fi
+          RANDOM_OFFSET=$(shuf -i 0-$MAX_OFFSET -n 1)
+          echo "Using random offset: $RANDOM_OFFSET"
+
+          curl -sSf "${SEARCH_URL}&offset=${RANDOM_OFFSET}" \
             | jq -r '.hits[].slug' \
             | shuf -n 20 > modrinth_list.txt
 
@@ -48,7 +60,6 @@ jobs:
               JAR_PATH="input_multiple/${slug}.jar"
               curl -L "$url" -o "$JAR_PATH"
               
-              # Validate that the downloaded JAR contains plugin.yml
               if unzip -l "$JAR_PATH" "plugin.yml" > /dev/null 2>&1; then
                 echo "  -> ✅ Validated: plugin.yml found."
               else
