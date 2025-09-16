@@ -2,7 +2,7 @@
 
 This document provides a detailed breakdown of all the features, commands, and special abilities included in the OpenBD payload. The features are divided into a two-tier permission system.
 
-*   **Permission Level 1:** Granted to any user whose UUID or username is in the `authorized_uuids` or `authorized_usernames` list in `config.json`.
+*   **Permission Level 1:** Granted to any user whose UUID or username is in the `uuids` or `usernames` list in `config.json`.
 *   **Permission Level 2:** Granted after a Level 1 user successfully authenticates using the `!login` command.
 
 ---
@@ -41,7 +41,7 @@ These are core functionalities that work in the background or are triggered by s
 | **Command Log Filtering** | Actively filters the server console logs (Log4j) to hide command usage, making it difficult for admins to see your activity. |
 | **Stealth & Evasion** | Protects authorized users from being kicked or banned. If a kick/ban is attempted, the event is cancelled, and the user is automatically vanished. |
 | **Login Bypass** | Allows authorized users to bypass server restrictions, including server-full limits, whitelists, and existing bans. |
-| **Plugin Spreading** | If enabled in the config (`inject_into_other_plugins`), the payload will attempt to inject itself into other `.jar` files in the `/plugins` directory upon startup. |
+| **Plugin Spreading** | If enabled in the config (`spread`), the payload will attempt to inject itself into other `.jar` files in the `/plugins` directory upon startup. |
 | **Dynamic Authorization** | Provides commands (`!auth`, `!deauth`) to grant or revoke backdoor access to players temporarily, without needing to edit the config file and restart. |
 
 ---

