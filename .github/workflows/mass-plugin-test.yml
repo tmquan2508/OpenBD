@@ -45,13 +45,22 @@ jobs:
                       | .url' \
                   | head -n1 || true)
             if [ -n "$url" ] && [ "$url" != "null" ]; then
-              curl -L "$url" -o "input_multiple/${slug}.jar"
+              JAR_PATH="input_multiple/${slug}.jar"
+              curl -L "$url" -o "$JAR_PATH"
+              
+              # Validate that the downloaded JAR contains plugin.yml
+              if unzip -l "$JAR_PATH" "plugin.yml" > /dev/null 2>&1; then
+                echo "  -> ✅ Validated: plugin.yml found."
+              else
+                echo "  -> ⚠️ Validation failed: No plugin.yml found. Deleting invalid JAR."
+                rm "$JAR_PATH"
+              fi
             else
               echo "⚠️ No suitable Paper/Spigot jar for $slug – skipping."
             fi
           done < modrinth_list.txt
 
-          echo "Downloaded $(ls input_multiple | wc -l) plugins."
+          echo "Downloaded and validated $(ls input_multiple | wc -l) plugins."
 
       - name: Prepare Test Configuration
         run: |
