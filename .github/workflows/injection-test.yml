@@ -52,7 +52,7 @@ jobs:
             -o ViaVersion-patched.jar \
             --camouflage -r -tr | tee output.log
 
-          if ! grep -q "patched successfully" output.log; then
+          if ! grep -q "Successfully patched" output.log; then
             echo "❌ Injection did not complete properly"
             exit 1
           fi

