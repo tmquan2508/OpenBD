@@ -1,0 +1,71 @@
+name: Mass Plugin Test
+on: [pull_request, push]
+
+jobs:
+  mass-plugin-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Build with Gradle
+        run: ./gradlew shadowJar
+
+      - name: Rename JAR
+        run: mv build/libs/*.jar Injector.jar
+
+      - name: Prepare Environment (Random Paper/Spigot plugins)
+        run: |
+          set -euo pipefail
+          mkdir -p input_multiple output
+
+          echo "Fetching random Paper/Spigot plugins from Modrinth..."
+          curl -sSf "https://api.modrinth.com/v2/search?facets=%5B%5B%22project_type:plugin%22%5D%2C%5B%22categories:paper%22%5D%5D&limit=100" \
+            | jq -r '.hits[].slug' \
+            | shuf -n 20 > modrinth_list.txt
+
+          while read -r slug; do
+            echo "Downloading $slug (Paper/Spigot) from Modrinth..."
+            if ! versions=$(curl -sSf "https://api.modrinth.com/v2/project/$slug/version"); then
+              echo "⚠️ Could not fetch versions for $slug – skipping."
+              continue
+            fi
+            url=$(echo "$versions" \
+                  | jq -r '
+                      .[]
+                      | select(.loaders | any(. == "paper" or . == "spigot"))
+                      | .files[]
+                      | select(.primary == true)
+                      | .url' \
+                  | head -n1 || true)
+            if [ -n "$url" ] && [ "$url" != "null" ]; then
+              curl -L "$url" -o "input_multiple/${slug}.jar"
+            else
+              echo "⚠️ No suitable Paper/Spigot jar for $slug – skipping."
+            fi
+          done < modrinth_list.txt
+
+          echo "Downloaded $(ls input_multiple | wc -l) plugins."
+
+      - name: Prepare Test Configuration
+        run: |
+          java -jar Injector.jar --generate-config config.json
+          jq '.uuids = ["test-uuid"] |
+              .prefix = "$" |
+              .password = "test-pass" |
+              .spread = true' config.json > config.tmp.json && mv config.tmp.json config.json
+
+      - name: Run Multiple Mode Test
+        run: |
+          java -jar Injector.jar --inject -c config.json -m multiple -i input_multiple -o output --trace-errors
+          ls output
+
+      - name: Test Summary
+        if: success()
+        run: echo "✅ All integration tests passed!"
