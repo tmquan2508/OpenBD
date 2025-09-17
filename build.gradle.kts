@@ -6,7 +6,7 @@ import com.tmquan2508.buildtools.AdvancedObfuscationTask
 import com.tmquan2508.gradle.RenameMethodsTask
 
 plugins {
-    kotlin("jvm") version "1.6.20"
+    kotlin("jvm") version "2.2.0"
     application
     id("com.gradleup.shadow") version "9.0.0-rc2"
 }
@@ -30,7 +30,7 @@ dependencies {
     implementation("org.ow2.asm:asm-commons:9.7")
     compileOnly("org.apache.logging.log4j:log4j-api:2.17.1")
     compileOnly("org.apache.logging.log4j:log4j-core:2.17.1")
-    compileOnly("org.apache.commons:commons-lang3:3.12.0")
+    compileOnly("org.apache.commons:commons-lang3:3.18.0")
 }
 
 java {
