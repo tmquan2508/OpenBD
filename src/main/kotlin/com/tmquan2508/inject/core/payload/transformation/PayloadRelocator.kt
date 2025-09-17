@@ -28,9 +28,9 @@ class PayloadRelocator(private val camouflageGenerator: Camouflage) {
 
         Logs.info(" -> Camouflage enabled. Generating camouflage plan...")
         val plan = camouflageGenerator.generatePlan(targetJar)
-        Logs.info(" -> Selected camouflage package: '${plan.packageName}' with new base name '${plan.namePrefix}'")
+        Logs.info(" -> Selected camouflage package: '${plan.packageName}' with new base name '${plan.className}'")
 
-        val finalMainPayloadName = "${plan.packageName}/${plan.namePrefix}"
+        val finalMainPayloadName = "${plan.packageName}/${plan.className}"
 
         val relocationMap = rawPayloadClasses.associate { clazz ->
             val originalName = clazz.name
