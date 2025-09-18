@@ -10,3 +10,7 @@ plugins {
 }
 
 rootProject.name = "OpenBD"
+
+include(":openbd-payload")
+include(":openbd-core")
+include(":openbd-cli")
