@@ -17,7 +17,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Build with Gradle
-        run: ./gradlew shadowJar
+        run: ./gradlew build
 
       - name: Rename JAR
         run: mv build/libs/*.jar Injector.jar
