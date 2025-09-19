@@ -34,7 +34,7 @@ jobs:
       - name: Prepare dist folder
         run: |
           mkdir -p dist
-          cp build/libs/*.jar dist/OpenBD.jar
+          cp openbd-cli/build/libs/*.jar dist/OpenBD.jar
 
       - name: Download test plugin (ViaVersion)
         run: |

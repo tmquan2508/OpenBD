@@ -14,16 +14,3 @@ subprojects {
         maven { url = uri("https://maven.rikonardo.com/releases") }
     }
 }
-
-tasks.register<Copy>("gatherJar") {
-    dependsOn(project(":openbd-cli").tasks.named("shadowJar"))
-    from(project(":openbd-cli").tasks.named("shadowJar"))
-    into(layout.buildDirectory.dir("libs"))
-    rename { fileName ->
-        fileName.replace(project(":openbd-cli").name, rootProject.name)
-    }
-}
-
-tasks.named("assemble") {
-    dependsOn(tasks.named("gatherJar"))
-}

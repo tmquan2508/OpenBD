@@ -45,4 +45,4 @@ jobs:
         with:
             name: OpenBD ${{ github.ref_name }}
             draft: true 
-            files: ./build/libs/*
+            files: ./openbd-cli/build/libs/*

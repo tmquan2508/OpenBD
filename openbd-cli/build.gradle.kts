@@ -8,7 +8,6 @@ plugins {
 
 dependencies {
     implementation(project(":openbd-core"))
-
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("com.github.ajalt.mordant:mordant:2.0.0-beta6")
 }
@@ -29,23 +28,19 @@ tasks.jar {
 
 tasks {
     named<ShadowJar>("shadowJar") {
-        archiveClassifier.set("") 
         mergeServiceFiles()
-    }
-
-    named("distZip") {
-        dependsOn(named("shadowJar"))
-    }
-    named("distTar") {
-        dependsOn(named("shadowJar"))
-    }
-    named("startScripts") {
-        dependsOn(named("shadowJar"))
+        archiveClassifier.set("") 
+        archiveBaseName.set("OpenBD") 
+        archiveVersion.set(project.version.toString())
     }
 
     build {
         dependsOn(shadowJar)
     }
+
+    distZip { dependsOn(shadowJar) }
+    distTar { dependsOn(shadowJar) }
+    startScripts { dependsOn(shadowJar) }
 }
 
 distributions {

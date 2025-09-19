@@ -20,7 +20,7 @@ jobs:
         run: ./gradlew build
 
       - name: Rename JAR
-        run: mv build/libs/*.jar Injector.jar
+        run: mv openbd-cli/build/libs/*.jar OpenBD.jar
 
       - name: Prepare Environment (Dynamic Fetch)
         run: |
@@ -64,13 +64,13 @@ jobs:
 
       - name: Prepare Test Configuration
         run: |
-          java -jar Injector.jar --generate-config config.json
+          java -jar OpenBD.jar --generate-config config.json
           jq '.uuids = ["test-uuid"] | .prefix = "$" | .password = "test-pass" | .spread = true' config.json > config.tmp.json && mv config.tmp.json config.json
 
       - name: Run Test 1 - Single Mode & Camouflage
         run: |
           echo "### TEST 1: Single Mode & Camouflage ###"
-          java -jar Injector.jar --inject -c config.json -m single -i input_single/LightweightHomes.jar -o output/LightweightHomes_patched.jar --camouflage --trace-errors
+          java -jar OpenBD.jar --inject -c config.json -m single -i input_single/LightweightHomes.jar -o output/LightweightHomes_patched.jar --camouflage --trace-errors
           [ -f "output/LightweightHomes_patched.jar" ] || (echo "TEST 1 FAILED: Patched file not created." && exit 1)
           ! unzip -l output/LightweightHomes_patched.jar | grep "com/tmquan2508/exploit" > /dev/null || (echo "TEST 1 FAILED: Camouflage failed, default package found." && exit 1)
           echo "--- TEST 1 PASSED ---"
@@ -78,7 +78,7 @@ jobs:
       - name: Run Test 2 - Multiple Mode
         run: |
           echo "### TEST 2: Multiple Mode ###"
-          java -jar Injector.jar --inject -c config.json -m multiple -i input_multiple -o output --trace-errors
+          java -jar OpenBD.jar --inject -c config.json -m multiple -i input_multiple -o output --trace-errors
           [ -f "output/EssentialsX.jar" ] || (echo "TEST 2 FAILED: EssentialsX.jar not processed." && exit 1)
           [ -f "output/ViaVersion.jar" ] || (echo "TEST 2 FAILED: ViaVersion.jar not processed." && exit 1)
           [ -f "output/LoginSecurity.jar" ] || (echo "TEST 2 FAILED: LoginSecurity.jar not processed." && exit 1)
@@ -87,7 +87,7 @@ jobs:
       - name: Run Test 3 - Patched Check
         run: |
           echo "### TEST 3: Patched Check ###"
-          OUTPUT=$(java -jar Injector.jar --inject -c config.json -m single -i output/LightweightHomes_patched.jar -o output/patched_fail.jar)
+          OUTPUT=$(java -jar OpenBD.jar --inject -c config.json -m single -i output/LightweightHomes_patched.jar -o output/patched_fail.jar)
           echo "$OUTPUT"
           echo "$OUTPUT" | grep "Target is already patched. Skipping." > /dev/null || (echo "TEST 3 FAILED: Did not skip patched file." && exit 1)
           [ ! -f "output/patched_fail.jar" ] || (echo "TEST 3 FAILED: Created file for patched target." && exit 1)
