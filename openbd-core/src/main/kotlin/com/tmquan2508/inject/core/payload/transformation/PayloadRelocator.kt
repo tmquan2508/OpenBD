@@ -21,14 +21,9 @@ class PayloadRelocator(
     }
 
     fun createRelocationPlan(
-        camouflageEnabled: Boolean,
         targetJar: File,
         rawPayloadClasses: List<ClassFile>
     ): Pair<Map<String, String>, String> {
-        if (!camouflageEnabled) {
-            return Pair(emptyMap(), ORIGINAL_MAIN_PAYLOAD_NAME)
-        }
-
         logger.info(" -> Camouflage enabled. Generating camouflage plan...")
         val plan = camouflageGenerator.generatePlan(targetJar)
         logger.info(" -> Selected camouflage package: '${plan.packageName}' with new base name '${plan.className}'")
